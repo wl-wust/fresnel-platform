@@ -1,11 +1,4 @@
-// Mobile JavaScript - 稳定性优化版
-let currentImage = null;
-let cameraStream = null;
-let isLoading = false;
-
-// 网络请求重试机制
-function throwError(url, options, maxRetries = 3, timeout = 30000) {
-    const controller = new AbortController();
+function throwError(msg){throw new Error(msg);\n}\n    const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     for (let i = 0; i < maxRetries; i++) {
@@ -435,7 +428,7 @@ function uploadData(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         const text = e.target.result;
         let data = [];
         try {
