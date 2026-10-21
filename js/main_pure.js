@@ -13,12 +13,12 @@ document.querySelectorAll(".tab").forEach(tab => {
 function throwError(url, options, maxRetries = 3) {
     for (let i = 0; i < maxRetries; i++) {
         try {
-            const response = fetch(url, options);
+            const response = await fetch(url, options);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
+            return await response.json();
         } catch (error) {
             if (i === maxRetries - 1) throw error;
-            throwError();
+            await new Promise(r => setTimeout(r, 1000 * (i + 1)));
         }
     }
 }
@@ -32,7 +32,7 @@ function showAlert(msg) {
 }
 
 // 图像分析
-function analyzeImage() {
+async function analyzeImage() {
     const input = document.getElementById("imageInput");
     if (!input.files.length) { 
         showAlert("请先选择图像文件"); 
@@ -41,7 +41,7 @@ function analyzeImage() {
     const formData = new FormData();
     formData.append("file", input.files[0]);
     try {
-        const result = throwError("/analyze", { method: "POST", body: formData });
+        const result = await throwError("/analyze", { method: "POST", body: formData });
         let html = '<div class="result-box"><h3>分析结果</h3><pre>' + JSON.stringify(result.data, null, 2) + '</pre></div>';
         document.getElementById('analysisResult').innerHTML = html;
     } catch (error) { 
@@ -50,13 +50,13 @@ function analyzeImage() {
 }
 
 // 波长计算
-function calcWavelength() {
+async function calcWavelength() {
     const d = parseFloat(document.getElementById("d_value").value);
     const D = parseFloat(document.getElementById("D_value").value);
     const fringe_px = parseFloat(document.getElementById("fringe_period_px")?.value || 10);
     const pixel_size = parseFloat(document.getElementById("pixel_size").value);
     try {
-        const result = throwError("/wavelength", {
+        const result = await throwError("/wavelength", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({d, D, fringe_period_px: fringe_px, pixel_size_mm: pixel_size})
@@ -68,12 +68,12 @@ function calcWavelength() {
 }
 
 // 比值法
-function calcRatioMethod() {
+async function calcRatioMethod() {
     const fringe_laser = parseFloat(document.getElementById("fringe_laser").value);
     const fringe_sodium = parseFloat(document.getElementById("fringe_sodium").value);
     const lambda_laser = parseFloat(document.getElementById("lambda_laser").value);
     try {
-        const result = throwError("/ratio_method", {
+        const result = await throwError("/ratio_method", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({fringe_period_laser: fringe_laser, fringe_period_sodium: fringe_sodium, lambda_laser})
@@ -85,7 +85,7 @@ function calcRatioMethod() {
 }
 
 // 最小二乘拟合
-function performFitTable() {
+async function performFitTable() {
     const rows = document.querySelectorAll("#fitTable tbody tr");
     const x = [], y = [];
     rows.forEach(row => {
@@ -98,7 +98,7 @@ function performFitTable() {
         return; 
     }
     try {
-        const result = throwError("/fit", { 
+        const result = await throwError("/fit", { 
             method: "POST", 
             headers: {"Content-Type": "application/json"}, 
             body: JSON.stringify({x, y}) 
@@ -110,7 +110,7 @@ function performFitTable() {
 }
 
 // 不确定度评定
-function calcUncertaintyTable() {
+async function calcUncertaintyTable() {
     const inputs = document.querySelectorAll("#uncTable .unc-value");
     const values = Array.from(inputs).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
     if (values.length < 2) { 
@@ -118,7 +118,7 @@ function calcUncertaintyTable() {
         return; 
     }
     try {
-        const result = throwError("/uncertainty", { 
+        const result = await throwError("/uncertainty", { 
             method: "POST", 
             headers: {"Content-Type": "application/json"}, 
             body: JSON.stringify({values}) 
@@ -130,7 +130,7 @@ function calcUncertaintyTable() {
 }
 
 // 多路径加权合成
-function comparePathsTable() {
+async function comparePathsTable() {
     const nameInputs = document.querySelectorAll("#pathTable .path-name");
     const valueInputs = document.querySelectorAll("#pathTable .path-value");
     const uncInputs = document.querySelectorAll("#pathTable .path-unc");
@@ -146,7 +146,7 @@ function comparePathsTable() {
         return; 
     }
     try {
-        const result = throwError("/compare", {
+        const result = await throwError("/compare", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({paths, standard_value})
@@ -159,7 +159,7 @@ function comparePathsTable() {
 
 // UI切换函数
 function switchToMobile() {
-    window.location.href = "mobile.html";
+    window.location.href = "/mobile";
 }
 
 // 表格操作

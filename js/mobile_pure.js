@@ -10,17 +10,17 @@ function throwError(url, options, maxRetries = 3, timeout = 30000) {
     
     for (let i = 0; i < maxRetries; i++) {
         try {
-            const response = fetch(url, { ...options, signal: controller.signal });
+            const response = await fetch(url, { ...options, signal: controller.signal });
             clearTimeout(timeoutId);
             
             if (!response.ok) {
                 throw new Error(`HTTP错误: ${response.status}`);
             }
-            return response.json();
+            return await response.json();
         } catch (error) {
             clearTimeout(timeoutId);
             if (i === maxRetries - 1) throw error;
-            throwError(String.fromCharCode(34)+String.fromCharCode(34));
+            await new Promise(r => setTimeout(r, 1000 * (i + 1))); // 指数退避
         }
     }
 }
@@ -33,7 +33,7 @@ function switchTab(tabId, btn) {
     if (tabId !== "capture" && cameraStream) stopCamera();
 }
 
-function openCamera() { try { const video = document.getElementById("video"); if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showAlert("浏览器不支持相机，请使用Chrome/Safari或选择相册图片"); return; } cameraStream = navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }); video.srcObject = cameraStream; video.style.display = "block"; document.getElementById("previewBox").style.display = "none"; } catch(e) { showAlert("无法访问相机: " + e.message); } }
+async function openCamera() { try { const video = document.getElementById("video"); if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showAlert("浏览器不支持相机，请使用Chrome/Safari或选择相册图片"); return; } cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }); video.srcObject = cameraStream; video.style.display = "block"; document.getElementById("previewBox").style.display = "none"; } catch(e) { showAlert("无法访问相机: " + e.message); } }
 }
 
 function stopCamera() {
@@ -63,7 +63,7 @@ function handleFile(event) {
     reader.readAsDataURL(file);
 }
 
-function analyzeImage() {
+async function analyzeImage() {
     if (isLoading) return; // 防止重复点击
     if (!currentImage) { 
         showAlert("请先选择或拍摄图片"); 
@@ -77,7 +77,7 @@ function analyzeImage() {
     formData.append("file", currentImage);
     
     try {
-        const result = throwError("/analyze", {method:"POST", body:formData});
+        const result = await throwError("/analyze", {method:"POST", body:formData});
         if (result.status === "success") {
             const d = result.data;
             let html = "<h4>分析结果</h4>";
@@ -154,7 +154,7 @@ function addUncInput() {
     div.appendChild(input);
 }
 
-function calcUncertainty() {
+async function calcUncertainty() {
     const inputs = document.querySelectorAll("#uncInputs input");
     const values = Array.from(inputs).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
     if (values.length < 2) { 
@@ -163,7 +163,7 @@ function calcUncertainty() {
     }
     
     try {
-        const result = throwError("/uncertainty", {
+        const result = await throwError("/uncertainty", {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({values})
@@ -192,7 +192,7 @@ function addPathInput() {
     div.appendChild(row);
 }
 
-function comparePaths() {
+async function comparePaths() {
     const valueInputs = document.querySelectorAll(".path-value");
     const uncInputs = document.querySelectorAll(".path-unc");
     const paths = Array.from(valueInputs).map((v, i) => ({
@@ -206,7 +206,7 @@ function comparePaths() {
     }
     
     try {
-        const result = throwError("/compare", {
+        const result = await throwError("/compare", {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({paths, standard_value:589.3})
@@ -250,7 +250,7 @@ function addRow() {
 let frameResults = [];
 let maxFrames = 20;
 
-function analyzeMultipleFrames() {
+async function analyzeMultipleFrames() {
     const files = document.getElementById('multiframeFile').files;
     if (files.length < 2) { showAlert('请至少选择2张图片进行多帧分析'); return; }
     if (files.length > maxFrames) { showAlert('最多支持' + maxFrames + '帧'); return; }
@@ -262,7 +262,7 @@ function analyzeMultipleFrames() {
         formData.append('files', files[i]);
     }
     try {
-        const result = throwError('/analyze_multiframe', {method:'POST', body:formData});
+        const result = await throwError('/analyze_multiframe', {method:'POST', body:formData});
         if (result.status === 'success') {
             const d = result.data;
             let html = '<h4>多帧分析结果</h4>';
@@ -291,7 +291,7 @@ function clearFrameResults() {
 }
 
 // ======== 增强不确定度评定 ========
-function calcUncertaintyEnhanced() {
+async function calcUncertaintyEnhanced() {
     const d = parseFloat(document.getElementById('unc_d').value || 0.5);
     const D = parseFloat(document.getElementById('unc_D').value || 500);
     const fringe_px = parseFloat(document.getElementById('unc_fringe').value);
@@ -301,7 +301,7 @@ function calcUncertaintyEnhanced() {
     const u_fringe = document.getElementById('unc_u_fringe').value ? parseFloat(document.getElementById('unc_u_fringe').value) : null;
     if (isNaN(fringe_px) || fringe_px <= 0) { showAlert('请输入有效的条纹间距'); return; }
     try {
-        const result = throwError('/uncertainty_enhanced', {
+        const result = await throwError('/uncertainty_enhanced', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({d, D, fringe_period_px: fringe_px, pixel_k, u_d, u_D, u_fringe})
         });
@@ -326,7 +326,7 @@ function calcUncertaintyEnhanced() {
 }
 
 // ======== 多路径加权合成 ========
-function calcWeightedCombine() {
+async function calcWeightedCombine() {
     const results = [];
     const rows = document.querySelectorAll('#combineTable tbody tr');
     rows.forEach((row, i) => {
@@ -337,7 +337,7 @@ function calcWeightedCombine() {
     });
     if (results.length < 2) { showAlert('请至少添加2条路径数据'); return; }
     try {
-        const result = throwError('/weighted_combine', {
+        const result = await throwError('/weighted_combine', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({results, standard_value: 589.3})
         });
@@ -400,7 +400,7 @@ function loadSavedK() {
     }
 }
 
-function analyzeReticle() {
+async function analyzeReticle() {
     const input = document.getElementById('reticleFile');
     if (!input || !input.files.length) { showAlert('请先选择分划板图像'); return; }
     isLoading = true;
@@ -409,7 +409,7 @@ function analyzeReticle() {
     formData.append('file', input.files[0]);
     formData.append('scale_division', document.getElementById('scale_division').value || 0.01);
     try {
-        const result = throwError('/reticle', {method:'POST', body:formData});
+        const result = await throwError('/reticle', {method:'POST', body:formData});
         if (result.status === 'success') {
             const d = result.data;
             let html = '<h4>分划板识别结果</h4>';
@@ -435,7 +435,7 @@ function uploadData(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         const text = e.target.result;
         let data = [];
         try {
@@ -453,13 +453,13 @@ function uploadData(event) {
                     }
                 }
             }
-            addUploadedData(data);
+            await addUploadedData(data);
         } catch(err) { showAlert('文件格式错误: ' + err.message); }
     };
     reader.readAsText(file);
 }
 
-function addUploadedData(data) {
+async function addUploadedData(data) {
     const tbody = document.getElementById('dataTableBody');
     const startIdx = tbody.children.length + 1;
     for (let i = 0; i < data.length; i++) {
@@ -515,12 +515,12 @@ function exportData() {
     link.click();
 }
 
-function calcUncertainty() {
+async function calcUncertainty() {
     const inputs = document.querySelectorAll('#uncInputs input');
     const values = Array.from(inputs).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
     if (values.length < 2) { showAlert('至少需要2个测量值'); return; }
     try {
-        const result = throwError('/uncertainty', {
+        const result = await throwError('/uncertainty', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({values})
@@ -535,7 +535,7 @@ function calcUncertainty() {
     } catch(err) { showAlert('计算失败: ' + err.message); }
 }
 
-function comparePaths() {
+async function comparePaths() {
     const valueInputs = document.querySelectorAll('.path-value');
     const uncInputs = document.querySelectorAll('.path-unc');
     const paths = Array.from(valueInputs).map((v, i) => ({
@@ -544,7 +544,7 @@ function comparePaths() {
     })).filter(p => !isNaN(p.value));
     if (paths.length === 0) { showAlert('请添加测量数据'); return; }
     try {
-        const result = throwError('/compare', {
+        const result = await throwError('/compare', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({paths, standard_value: 589.3})
@@ -565,10 +565,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function switchUI() {
     var path = window.location.pathname;
-    if (path.includes("mobile.html")) {
-        window.location.href = "index.html";
+    if (path.includes("/mobile")) {
+        window.location.href = "/";
     } else {
-        window.location.href = "mobile.html";
+        window.location.href = "/mobile";
     }
 }
 
