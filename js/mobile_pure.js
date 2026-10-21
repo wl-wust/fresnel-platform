@@ -4,13 +4,7 @@ let cameraStream = null;
 let isLoading = false;
 
 // 网络请求重试机制
-function throwError(url, options, maxRetries = 3, timeout = 30000) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
-    for (let i = 0; i < maxRetries; i++) {
-        try {
-            const response = fetch(url, { ...options, signal: controller.signal });
+function throwError(msg){throw new Error(msg);\n});
             clearTimeout(timeoutId);
             
             if (!response.ok) {
