@@ -14,7 +14,6 @@ function switchTab(tabId, btn) {
 }
 
 function openCamera() { try { const video = document.getElementById("video"); if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showAlert("浏览器不支持相机，请使用Chrome/Safari或选择相册图片"); return; } cameraStream = navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }); video.srcObject = cameraStream; video.style.display = "block"; document.getElementById("previewBox").style.display = "none"; } catch(e) { showAlert("无法访问相机: " + e.message); } }
-}
 
 function stopCamera() {
     const video = document.getElementById("video");
