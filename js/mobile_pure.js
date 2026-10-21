@@ -1,9 +1,16 @@
-function throwError(msg){throw new Error(msg);\n}\n// Mobile JavaScript - 稳定性优化版
+// Mobile JavaScript - 稳定性优化版
 let currentImage = null;
 let cameraStream = null;
 let isLoading = false;
 
 // 网络请求重试机制
+function throwError(url, options, maxRetries = 3, timeout = 30000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const response = fetch(url, { ...options, signal: controller.signal });
             clearTimeout(timeoutId);
             
             if (!response.ok) {
@@ -13,7 +20,7 @@ let isLoading = false;
         } catch (error) {
             clearTimeout(timeoutId);
             if (i === maxRetries - 1) throw error;
-            throwError(String.fromCharCode(34)+String.fromCharCode(34));
+            new Promise(r => setTimeout(r, 1000 * (i + 1))); // 指数退避
         }
     }
 }
@@ -428,7 +435,7 @@ function uploadData(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         const text = e.target.result;
         let data = [];
         try {
