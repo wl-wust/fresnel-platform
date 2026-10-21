@@ -10,17 +10,17 @@ function throwError(url, options, maxRetries = 3, timeout = 30000) {
     
     for (let i = 0; i < maxRetries; i++) {
         try {
-            const response = await fetch(url, { ...options, signal: controller.signal });
+            const response = fetch(url, { ...options, signal: controller.signal });
             clearTimeout(timeoutId);
             
             if (!response.ok) {
                 throw new Error(`HTTP错误: ${response.status}`);
             }
-            return await response.json();
+            return response.json();
         } catch (error) {
             clearTimeout(timeoutId);
             if (i === maxRetries - 1) throw error;
-            await new Promise(r => setTimeout(r, 1000 * (i + 1))); // 指数退避
+            throwError(String.fromCharCode(34)+String.fromCharCode(34));
         }
     }
 }
@@ -33,7 +33,7 @@ function switchTab(tabId, btn) {
     if (tabId !== "capture" && cameraStream) stopCamera();
 }
 
-function openCamera() { try { const video = document.getElementById("video"); if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showAlert("浏览器不支持相机，请使用Chrome/Safari或选择相册图片"); return; } cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }); video.srcObject = cameraStream; video.style.display = "block"; document.getElementById("previewBox").style.display = "none"; } catch(e) { showAlert("无法访问相机: " + e.message); } }
+function openCamera() { try { const video = document.getElementById("video"); if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showAlert("浏览器不支持相机，请使用Chrome/Safari或选择相册图片"); return; } cameraStream = navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }); video.srcObject = cameraStream; video.style.display = "block"; document.getElementById("previewBox").style.display = "none"; } catch(e) { showAlert("无法访问相机: " + e.message); } }
 }
 
 function stopCamera() {
@@ -77,7 +77,7 @@ function analyzeImage() {
     formData.append("file", currentImage);
     
     try {
-        const result = await throwError("/analyze", {method:"POST", body:formData});
+        const result = throwError("/analyze", {method:"POST", body:formData});
         if (result.status === "success") {
             const d = result.data;
             let html = "<h4>分析结果</h4>";
@@ -163,7 +163,7 @@ function calcUncertainty() {
     }
     
     try {
-        const result = await throwError("/uncertainty", {
+        const result = throwError("/uncertainty", {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({values})
@@ -206,7 +206,7 @@ function comparePaths() {
     }
     
     try {
-        const result = await throwError("/compare", {
+        const result = throwError("/compare", {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({paths, standard_value:589.3})
@@ -262,7 +262,7 @@ function analyzeMultipleFrames() {
         formData.append('files', files[i]);
     }
     try {
-        const result = await throwError('/analyze_multiframe', {method:'POST', body:formData});
+        const result = throwError('/analyze_multiframe', {method:'POST', body:formData});
         if (result.status === 'success') {
             const d = result.data;
             let html = '<h4>多帧分析结果</h4>';
@@ -301,7 +301,7 @@ function calcUncertaintyEnhanced() {
     const u_fringe = document.getElementById('unc_u_fringe').value ? parseFloat(document.getElementById('unc_u_fringe').value) : null;
     if (isNaN(fringe_px) || fringe_px <= 0) { showAlert('请输入有效的条纹间距'); return; }
     try {
-        const result = await throwError('/uncertainty_enhanced', {
+        const result = throwError('/uncertainty_enhanced', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({d, D, fringe_period_px: fringe_px, pixel_k, u_d, u_D, u_fringe})
         });
@@ -337,7 +337,7 @@ function calcWeightedCombine() {
     });
     if (results.length < 2) { showAlert('请至少添加2条路径数据'); return; }
     try {
-        const result = await throwError('/weighted_combine', {
+        const result = throwError('/weighted_combine', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({results, standard_value: 589.3})
         });
@@ -409,7 +409,7 @@ function analyzeReticle() {
     formData.append('file', input.files[0]);
     formData.append('scale_division', document.getElementById('scale_division').value || 0.01);
     try {
-        const result = await throwError('/reticle', {method:'POST', body:formData});
+        const result = throwError('/reticle', {method:'POST', body:formData});
         if (result.status === 'success') {
             const d = result.data;
             let html = '<h4>分划板识别结果</h4>';
@@ -453,7 +453,7 @@ function uploadData(event) {
                     }
                 }
             }
-            await addUploadedData(data);
+            addUploadedData(data);
         } catch(err) { showAlert('文件格式错误: ' + err.message); }
     };
     reader.readAsText(file);
@@ -520,7 +520,7 @@ function calcUncertainty() {
     const values = Array.from(inputs).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
     if (values.length < 2) { showAlert('至少需要2个测量值'); return; }
     try {
-        const result = await throwError('/uncertainty', {
+        const result = throwError('/uncertainty', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({values})
@@ -544,7 +544,7 @@ function comparePaths() {
     })).filter(p => !isNaN(p.value));
     if (paths.length === 0) { showAlert('请添加测量数据'); return; }
     try {
-        const result = await throwError('/compare', {
+        const result = throwError('/compare', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({paths, standard_value: 589.3})
