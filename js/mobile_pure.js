@@ -565,7 +565,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function switchUI() {
     var path = window.location.pathname;
-    if (path.includes("/mobile")) {
+    if (path.includes("mobile.html")) {
         window.location.href = "index.html";
     } else {
         window.location.href = "mobile.html";
