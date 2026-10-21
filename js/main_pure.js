@@ -159,7 +159,7 @@ async function comparePathsTable() {
 
 // UI切换函数
 function switchToMobile() {
-    window.location.href = "/mobile";
+    window.location.href = "mobile.html";
 }
 
 // 表格操作
