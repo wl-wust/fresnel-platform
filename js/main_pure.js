@@ -10,7 +10,7 @@ document.querySelectorAll(".tab").forEach(tab => {
 });
 
 // 网络请求重试
-async function throwError(url, options, maxRetries = 3) {
+function throwError(url, options, maxRetries = 3) {
     for (let i = 0; i < maxRetries; i++) {
         try {
             const response = await fetch(url, options);
