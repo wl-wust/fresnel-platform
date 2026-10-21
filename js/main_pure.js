@@ -13,12 +13,12 @@ document.querySelectorAll(".tab").forEach(tab => {
 function throwError(url, options, maxRetries = 3) {
     for (let i = 0; i < maxRetries; i++) {
         try {
-            const response = await fetch(url, options);
+            const response = fetch(url, options);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await response.json();
+            return response.json();
         } catch (error) {
             if (i === maxRetries - 1) throw error;
-            await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+            new Promise(r => setTimeout(r, 1000 * (i + 1)));
         }
     }
 }
@@ -41,7 +41,7 @@ async function analyzeImage() {
     const formData = new FormData();
     formData.append("file", input.files[0]);
     try {
-        const result = await throwError("/analyze", { method: "POST", body: formData });
+        const result = throwError("/analyze", { method: "POST", body: formData });
         let html = '<div class="result-box"><h3>分析结果</h3><pre>' + JSON.stringify(result.data, null, 2) + '</pre></div>';
         document.getElementById('analysisResult').innerHTML = html;
     } catch (error) { 
@@ -56,7 +56,7 @@ async function calcWavelength() {
     const fringe_px = parseFloat(document.getElementById("fringe_period_px")?.value || 10);
     const pixel_size = parseFloat(document.getElementById("pixel_size").value);
     try {
-        const result = await throwError("/wavelength", {
+        const result = throwError("/wavelength", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({d, D, fringe_period_px: fringe_px, pixel_size_mm: pixel_size})
@@ -73,7 +73,7 @@ async function calcRatioMethod() {
     const fringe_sodium = parseFloat(document.getElementById("fringe_sodium").value);
     const lambda_laser = parseFloat(document.getElementById("lambda_laser").value);
     try {
-        const result = await throwError("/ratio_method", {
+        const result = throwError("/ratio_method", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({fringe_period_laser: fringe_laser, fringe_period_sodium: fringe_sodium, lambda_laser})
@@ -98,7 +98,7 @@ async function performFitTable() {
         return; 
     }
     try {
-        const result = await throwError("/fit", { 
+        const result = throwError("/fit", { 
             method: "POST", 
             headers: {"Content-Type": "application/json"}, 
             body: JSON.stringify({x, y}) 
@@ -118,7 +118,7 @@ async function calcUncertaintyTable() {
         return; 
     }
     try {
-        const result = await throwError("/uncertainty", { 
+        const result = throwError("/uncertainty", { 
             method: "POST", 
             headers: {"Content-Type": "application/json"}, 
             body: JSON.stringify({values}) 
@@ -146,7 +146,7 @@ async function comparePathsTable() {
         return; 
     }
     try {
-        const result = await throwError("/compare", {
+        const result = throwError("/compare", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({paths, standard_value})
