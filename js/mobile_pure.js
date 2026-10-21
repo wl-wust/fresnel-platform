@@ -1,22 +1,9 @@
-function throwError(msg){throw new Error(msg);\n}\n    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
-    for (let i = 0; i < maxRetries; i++) {
-        try {
-            const response = fetch(url, { ...options, signal: controller.signal });
-            clearTimeout(timeoutId);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP错误: ${response.status}`);
-            }
-            return response.json();
-        } catch (error) {
-            clearTimeout(timeoutId);
-            if (i === maxRetries - 1) throw error;
-            new Promise(r => setTimeout(r, 1000 * (i + 1))); // 指数退避
-        }
-    }
-}
+// Mobile JavaScript - 稳定性优化版
+let currentImage = null;
+let cameraStream = null;
+let isLoading = false;
+
+// 网络请求重试机制
 
 function switchTab(tabId, btn) {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -428,7 +415,7 @@ function uploadData(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async function(e) {
+    reader.onload = function(e) {
         const text = e.target.result;
         let data = [];
         try {
