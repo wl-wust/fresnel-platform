@@ -33,7 +33,7 @@ function switchTab(tabId, btn) {
     if (tabId !== "capture" && cameraStream) stopCamera();
 }
 
-async function openCamera() { try { const video = document.getElementById("video"); if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showAlert("浏览器不支持相机，请使用Chrome/Safari或选择相册图片"); return; } cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }); video.srcObject = cameraStream; video.style.display = "block"; document.getElementById("previewBox").style.display = "none"; } catch(e) { showAlert("无法访问相机: " + e.message); } }
+function openCamera() { try { const video = document.getElementById("video"); if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showAlert("浏览器不支持相机，请使用Chrome/Safari或选择相册图片"); return; } cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }); video.srcObject = cameraStream; video.style.display = "block"; document.getElementById("previewBox").style.display = "none"; } catch(e) { showAlert("无法访问相机: " + e.message); } }
 }
 
 function stopCamera() {
@@ -63,7 +63,7 @@ function handleFile(event) {
     reader.readAsDataURL(file);
 }
 
-async function analyzeImage() {
+function analyzeImage() {
     if (isLoading) return; // 防止重复点击
     if (!currentImage) { 
         showAlert("请先选择或拍摄图片"); 
@@ -154,7 +154,7 @@ function addUncInput() {
     div.appendChild(input);
 }
 
-async function calcUncertainty() {
+function calcUncertainty() {
     const inputs = document.querySelectorAll("#uncInputs input");
     const values = Array.from(inputs).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
     if (values.length < 2) { 
@@ -192,7 +192,7 @@ function addPathInput() {
     div.appendChild(row);
 }
 
-async function comparePaths() {
+function comparePaths() {
     const valueInputs = document.querySelectorAll(".path-value");
     const uncInputs = document.querySelectorAll(".path-unc");
     const paths = Array.from(valueInputs).map((v, i) => ({
@@ -250,7 +250,7 @@ function addRow() {
 let frameResults = [];
 let maxFrames = 20;
 
-async function analyzeMultipleFrames() {
+function analyzeMultipleFrames() {
     const files = document.getElementById('multiframeFile').files;
     if (files.length < 2) { showAlert('请至少选择2张图片进行多帧分析'); return; }
     if (files.length > maxFrames) { showAlert('最多支持' + maxFrames + '帧'); return; }
@@ -291,7 +291,7 @@ function clearFrameResults() {
 }
 
 // ======== 增强不确定度评定 ========
-async function calcUncertaintyEnhanced() {
+function calcUncertaintyEnhanced() {
     const d = parseFloat(document.getElementById('unc_d').value || 0.5);
     const D = parseFloat(document.getElementById('unc_D').value || 500);
     const fringe_px = parseFloat(document.getElementById('unc_fringe').value);
@@ -326,7 +326,7 @@ async function calcUncertaintyEnhanced() {
 }
 
 // ======== 多路径加权合成 ========
-async function calcWeightedCombine() {
+function calcWeightedCombine() {
     const results = [];
     const rows = document.querySelectorAll('#combineTable tbody tr');
     rows.forEach((row, i) => {
@@ -400,7 +400,7 @@ function loadSavedK() {
     }
 }
 
-async function analyzeReticle() {
+function analyzeReticle() {
     const input = document.getElementById('reticleFile');
     if (!input || !input.files.length) { showAlert('请先选择分划板图像'); return; }
     isLoading = true;
@@ -435,7 +435,7 @@ function uploadData(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async function(e) {
+    reader.onload = function(e) {
         const text = e.target.result;
         let data = [];
         try {
@@ -459,7 +459,7 @@ function uploadData(event) {
     reader.readAsText(file);
 }
 
-async function addUploadedData(data) {
+function addUploadedData(data) {
     const tbody = document.getElementById('dataTableBody');
     const startIdx = tbody.children.length + 1;
     for (let i = 0; i < data.length; i++) {
@@ -515,7 +515,7 @@ function exportData() {
     link.click();
 }
 
-async function calcUncertainty() {
+function calcUncertainty() {
     const inputs = document.querySelectorAll('#uncInputs input');
     const values = Array.from(inputs).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
     if (values.length < 2) { showAlert('至少需要2个测量值'); return; }
@@ -535,7 +535,7 @@ async function calcUncertainty() {
     } catch(err) { showAlert('计算失败: ' + err.message); }
 }
 
-async function comparePaths() {
+function comparePaths() {
     const valueInputs = document.querySelectorAll('.path-value');
     const uncInputs = document.querySelectorAll('.path-unc');
     const paths = Array.from(valueInputs).map((v, i) => ({

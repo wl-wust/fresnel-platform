@@ -32,7 +32,7 @@ function showAlert(msg) {
 }
 
 // 图像分析
-async function analyzeImage() {
+function analyzeImage() {
     const input = document.getElementById("imageInput");
     if (!input.files.length) { 
         showAlert("请先选择图像文件"); 
@@ -50,7 +50,7 @@ async function analyzeImage() {
 }
 
 // 波长计算
-async function calcWavelength() {
+function calcWavelength() {
     const d = parseFloat(document.getElementById("d_value").value);
     const D = parseFloat(document.getElementById("D_value").value);
     const fringe_px = parseFloat(document.getElementById("fringe_period_px")?.value || 10);
@@ -68,7 +68,7 @@ async function calcWavelength() {
 }
 
 // 比值法
-async function calcRatioMethod() {
+function calcRatioMethod() {
     const fringe_laser = parseFloat(document.getElementById("fringe_laser").value);
     const fringe_sodium = parseFloat(document.getElementById("fringe_sodium").value);
     const lambda_laser = parseFloat(document.getElementById("lambda_laser").value);
@@ -85,7 +85,7 @@ async function calcRatioMethod() {
 }
 
 // 最小二乘拟合
-async function performFitTable() {
+function performFitTable() {
     const rows = document.querySelectorAll("#fitTable tbody tr");
     const x = [], y = [];
     rows.forEach(row => {
@@ -110,7 +110,7 @@ async function performFitTable() {
 }
 
 // 不确定度评定
-async function calcUncertaintyTable() {
+function calcUncertaintyTable() {
     const inputs = document.querySelectorAll("#uncTable .unc-value");
     const values = Array.from(inputs).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
     if (values.length < 2) { 
@@ -130,7 +130,7 @@ async function calcUncertaintyTable() {
 }
 
 // 多路径加权合成
-async function comparePathsTable() {
+function comparePathsTable() {
     const nameInputs = document.querySelectorAll("#pathTable .path-name");
     const valueInputs = document.querySelectorAll("#pathTable .path-value");
     const uncInputs = document.querySelectorAll("#pathTable .path-unc");
