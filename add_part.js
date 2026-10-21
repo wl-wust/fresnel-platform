@@ -1,0 +1,1 @@
+const fs=require(String.fromCharCode(102)+String.fromCharCode(115));console.log(1);
