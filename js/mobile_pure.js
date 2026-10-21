@@ -435,7 +435,7 @@ function uploadData(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async function(e) {
+    reader.onload = function(e) {
         const text = e.target.result;
         let data = [];
         try {
