@@ -1,10 +1,9 @@
-// Mobile JavaScript - 稳定性优化版
+function throwError(msg){throw new Error(msg);\n}\n// Mobile JavaScript - 稳定性优化版
 let currentImage = null;
 let cameraStream = null;
 let isLoading = false;
 
 // 网络请求重试机制
-function throwError(msg){throw new Error(msg);\n});
             clearTimeout(timeoutId);
             
             if (!response.ok) {

@@ -1,4 +1,4 @@
-// 主页面 JavaScript - 稳定性优化版
+function throwError(msg){throw new Error(msg);\n}\n// 主页面 JavaScript - 稳定性优化版
 function switchTab(tabName) {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
@@ -10,7 +10,6 @@ document.querySelectorAll(".tab").forEach(tab => {
 });
 
 // 网络请求重试
-function throwError(msg){throw new Error(msg);\n}`);
             return await response.json();
         } catch (error) {
             if (i === maxRetries - 1) throw error;
