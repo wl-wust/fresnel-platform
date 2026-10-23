@@ -113,6 +113,47 @@ function updateParams() {
 function toggleLight() { showLight = document.getElementById("showLight").checked; render(); }
 function toggleLabels() { showLabels = document.getElementById("showLabels").checked; render(); }
 
+
+// 加载预设场景
+function loadPreset(name) {
+    if (!window.SIMULATION_DATA) {
+        console.error("仿真数据未加载");
+        return;
+    }
+    const preset = SIMULATION_DATA.presets.find(p => p.name === name);
+    if (!preset) {
+        console.error("未找到预设:", name);
+        return;
+    }
+    
+    const canvas = document.getElementById("fringeCanvas");
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+    
+    // 绘制干涉条纹
+    const xData = preset.x;
+    const IData = preset.I;
+    const xMax = 20;
+    const ppm = w / (2 * xMax);
+    
+    for (let px = 0; px < w; px++) {
+        const i = Math.floor(px / ppm + xMax);
+        if (i >= 0 && i < IData.length) {
+            const bright = Math.floor(IData[i] * 255);
+            ctx.fillStyle = `rgb(${bright}, ${Math.floor(bright * 0.9)}, ${Math.floor(bright * 0.5)})`;
+            ctx.fillRect(px, 0, 1, h);
+        }
+    }
+    
+    // 更新标题和结果
+    document.querySelector("#simPanel h3").textContent = 
+        `仿真结果: ${preset.name} (b=${preset.b}mm, z₁=${preset.z1}mm)`;
+    document.getElementById("simResult").textContent = 
+        `等效双缝间距 d = ${preset.d.toFixed(4)} mm, 条纹间距 Δx = ${preset.dx.toFixed(4)} mm`;
+}
 // ===== 核心：基于论文公式的干涉条纹模拟 =====
 function simulateInterference() {
     const panel = document.getElementById("simPanel");
