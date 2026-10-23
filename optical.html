@@ -1,17 +1,30 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>光学导轨模拟 - 菲涅耳双棱镜</title>
+    <title>菲涅耳双棱镜 - MATLAB仿真平台</title>
     <link rel="stylesheet" href="css/optical.css">
+    <style>
+        .sim-panel { background: #f0f8ff; border: 2px solid #667eea; border-radius: 8px; padding: 15px; margin-top: 15px; }
+        .sim-panel h3 { margin-top: 0; color: #667eea; }
+        .sim-canvas { display: block; margin: 10px auto; background: #fff; border: 1px solid #ddd; }
+        .preset-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+        .preset-btns button { padding: 8px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .preset-btns button:hover { opacity: 0.9; }
+        .param-display { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 10px 0; }
+        .param-item { background: white; padding: 8px; border-radius: 4px; border-left: 3px solid #667eea; }
+        .param-item label { font-size: 11px; color: #666; }
+        .param-item span { font-size: 16px; font-weight: bold; color: #333; }
+        .formula-box { background: #fffbe6; border: 1px solid #ffe58f; padding: 10px; border-radius: 6px; margin: 10px 0; font-family: monospace; font-size: 12px; }
+    </style>
 </head>
 <body>
     <div class="optical-container">
         <header>
             <button class="btn-back" onclick="window.location.href='index.html'">返回主页</button>
-            <h1>菲涅耳双棱镜实验 - 光路模拟器</h1>
-            <p>点击拖拽移动元件 | 右键删除 | 左侧工具栏添加装置</p>
+            <h1>菲涅耳双棱镜实验 - MATLAB仿真平台</h1>
+            <p>基于张颖涛、李洪国(2019)论文公式(10)的精确仿真</p>
         </header>
 
         <div class="main-layout">
@@ -26,48 +39,50 @@
             <div class="control-panel">
                 <h3>🔧 添加装置</h3>
                 <div class="tool-grid">
-                    <button class="tool-btn" onclick="addDevice('source')" title="钠光灯/激光">💡 光源</button>
-                    <button class="tool-btn" onclick="addDevice('slit')" title="可调单缝">🔲 单缝</button>
-                    <button class="tool-btn" onclick="addDevice('prism')" title="菲涅耳双棱镜">🔺 双棱镜</button>
-                    <button class="tool-btn" onclick="addDevice('lens')" title="凸透镜">🔍 凸透镜</button>
-                    <button class="tool-btn" onclick="addDevice('aperture')" title="圆孔光阑">⭕ 光阑</button>
-                    <button class="tool-btn" onclick="addDevice('screen')" title="观察屏/测微目镜">📍 观察屏</button>
-                    <button class="tool-btn" onclick="addDevice('ruler')" title="刻度尺">📏 刻度尺</button>
-                    <button class="tool-btn" onclick="addDevice('micrometer')" title="手机摄像头">🔬 测微目镜</button>
+                    <button class="tool-btn" onclick="addDevice('source')">💡 光源</button>
+                    <button class="tool-btn" onclick="addDevice('slit')">🔲 单缝</button>
+                    <button class="tool-btn" onclick="addDevice('prism')">🔺 双棱镜</button>
+                    <button class="tool-btn" onclick="addDevice('lens')">🔍 凸透镜</button>
+                    <button class="tool-btn" onclick="addDevice('screen')">📍 观察屏</button>
                 </div>
 
-                <h3>📊 当前参数 (论文公式)</h3>
-                <div class="info-panel">
-                    <div class="param-row"><span>物距 S:</span><span id="param_S">-</span></div>
-                    <div class="param-row"><span>像距 L:</span><span id="param_L">-</span></div>
-                    <div class="param-row"><span>总距离 D:</span><span id="param_D">-</span></div><div class="param-row"><span>等效双缝间距 d:</span><span id="param_d">-</span></div><div class="param-row"><span>条纹间距 Δx:</span><span id="param_dx">-</span></div>
+                <div class="param-display">
+                    <div class="param-item"><label>物距 S</label><span id="param_S">-</span></div>
+                    <div class="param-item"><label>像距 L</label><span id="param_L">-</span></div>
+                    <div class="param-item"><label>总距离 D</label><span id="param_D">-</span></div>
+                    <div class="param-item"><label>等效双缝 d</label><span id="param_d">-</span></div>
+                    <div class="param-item"><label>条纹间距 Δx</label><span id="param_dx">-</span></div>
                 </div>
-
-                <h3>🎨 显示选项</h3>
-                <label class="toggle-label"><input type="checkbox" id="showLight" checked onchange="toggleLight()"> 显示光路</label>
-                <label class="toggle-label"><input type="checkbox" id="showRays" onchange="toggleRays()"> 显示光线</label>
-                <label class="toggle-label"><input type="checkbox" id="showLabels" checked onchange="toggleLabels()"> 显示标签</label>
 
                 <div class="action-buttons">
-                    <button class="btn-primary" onclick="simulateInterference()">模拟干涉条纹</button>
+                    <button class="btn-primary" onclick="simulateInterference()">🔬 运行 MATLAB 仿真</button>
                     <button class="btn-secondary" onclick="resetLayout()">重置布局</button>
-                    <button class="btn-danger" onclick="clearAll()">清空画布</button>
                 </div>
             </div>
         </div>
 
-        <div id="interferencePanel" style="display:none">
-            <h3>干涉条纹模拟</h3>
-            <canvas id="fringeCanvas" width="600" height="150" style="background:#000;border-radius:10px"></canvas>
-            <button onclick="document.getElementById('interferencePanel').style.display='none'">关闭</button>
+        <div id="simPanel" class="sim-panel" style="display:none">
+            <h3>📊 干涉条纹仿真结果</h3>
+            <div class="preset-btns">
+                <button onclick="loadPreset('fig2a')">图2a (b=0.02)</button>
+                <button onclick="loadPreset('fig2b')">图2b (b=0.04)</button>
+                <button onclick="loadPreset('fig2c')">图2c (b=0.10)</button>
+                <button onclick="loadPreset('fig3a')">图3a (z₁=10)</button>
+                <button onclick="loadPreset('fig3b')">图3b (z₁=20)</button>
+                <button onclick="loadPreset('fig3c')">图3c (z₁=30)</button>
+                <button onclick="loadPreset('exp_a')">实验a</button>
+                <button onclick="loadPreset('exp_b')">实验b</button>
+                <button onclick="loadPreset('exp_c')">实验c</button>
+                <button onclick="loadPreset('fig6a')">图6a</button>
+                <button onclick="loadPreset('fig6b')">图6b</button>
+            </div>
+            <canvas id="fringeCanvas" class="sim-canvas" width="800" height="300"></canvas>
+            <div id="simResult" style="text-align:center;margin-top:10px;font-size:12px;color:#666;"></div>
+            <button onclick="document.getElementById('simPanel').style.display='none'" style="margin-top:10px;">关闭</button>
         </div>
     </div>
-    <script src="js/optical2d.js?v=3" defer></script>
+
+    <script src="js/simulation_data.js"></script>
+    <script src="js/optical2d.js?v=4" defer></script>
 </body>
 </html>
-
-
-
-
-
-
