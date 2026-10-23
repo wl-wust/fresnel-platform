@@ -116,6 +116,7 @@ function toggleLabels() { showLabels = document.getElementById("showLabels").che
 // ===== 核心：基于论文公式的干涉条纹模拟 =====
 function simulateInterference() {
     const panel = document.getElementById("simPanel");
+    if (!panel) { console.error("simPanel not found"); return; }
     panel.style.display = "block";
     const slit = devices.find(d => d.type === "slit"), prism = devices.find(d => d.type === "prism");
     const screen = devices.find(d => d.type === "micrometer" || d.type === "screen");
