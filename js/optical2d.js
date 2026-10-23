@@ -115,7 +115,7 @@ function toggleLabels() { showLabels = document.getElementById("showLabels").che
 
 // ===== 核心：基于论文公式的干涉条纹模拟 =====
 function simulateInterference() {
-    const panel = document.getElementById("interferencePanel");
+    const panel = document.getElementById("simPanel");
     panel.style.display = "block";
     const slit = devices.find(d => d.type === "slit"), prism = devices.find(d => d.type === "prism");
     const screen = devices.find(d => d.type === "micrometer" || d.type === "screen");
@@ -162,7 +162,7 @@ function simulateInterference() {
         cx.fillRect(px, 0, 1, h);
     }
     
-    document.querySelector("#interferencePanel h3").textContent = 
+    document.querySelector("#simPanel h3").textContent = 
         `干涉条纹模拟 (b=${b}mm, z₁=${z1.toFixed(0)}mm, z₂=${z2.toFixed(0)}mm, Δx=${delta_x.toFixed(3)}mm)`;
 }
 
