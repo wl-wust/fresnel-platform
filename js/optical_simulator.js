@@ -17,7 +17,19 @@ const DEVICE_TYPES = {
     screen: { name: "观察屏", icon: "📍", color: "#ffd93d", width: 60, height: 100 }
 };
 
-function init() { resizeCanvas(); window.addEventListener("resize", resizeCanvas); setupEvents(); resetLayout(); }
+function init() { 
+    resizeCanvas(); 
+    window.addEventListener("resize", resizeCanvas); 
+    setupEvents(); 
+    // 延迟一点确保画布完全初始化后再添加元件
+    setTimeout(() => {
+        devices = [];
+        nextId = 1;
+        selectedDevice = null;
+        document.getElementById("selected").textContent = "无";
+        ["source", "slit", "prism", "screen"].forEach((type, i) => addDevice(type));
+    }, 100);
+}
 function resizeCanvas() { 
     const c = canvas.parentElement; 
     canvas.width = c.clientWidth; 
@@ -326,6 +338,7 @@ function simulateInterference() {
 window.simulateInterference = simulateInterference;
 window.updateParams = updateParams;
 window.alignToAxis = alignToAxis;
+
 
 
 
