@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>双棱镜干涉实验</title>
+
+    <link rel="stylesheet" href="css/mobile.css?v=3.0">
+
+</head>
+
+<body>
+
+    <div class="app-container">
+
+        <header class="app-header">
+
+            <button class="btn-switch" onclick="switchUI()">切换到PC端</button>
+
+            <h1>菲涅耳双棱镜实验</h1>
+
+            <p class="subtitle">AI 数字化平台 v2.0</p>
+
+        <a href="optical.html" class="btn-optical-mobile">🔭 光学模拟</a></header>
+
+        <nav class="tab-nav">
+
+            <button class="tab-btn active" onclick="switchTab('capture',this)">拍照</button>
+
+            <button class="tab-btn" onclick="switchTab('calibrate',this)">标定</button>
+
+            <button class="tab-btn" onclick="switchTab('analysis',this)">分析</button>
+
+            <button class="tab-btn" onclick="switchTab('guide',this)">指南</button>
+
+        </nav>
+
+
+
+        <div id="capture" class="tab-page active">
+
+            <div class="camera-area">
+
+                <div class="preview-box" id="previewBox" onclick="triggerCamera()">
+
+                    <div class="preview-icon">相机</div>
+
+                    <p>点击拍照或选择图片</p>
+
+                    <p class="hint">建议：条纹周期≥8像素，峰值不过曝</p>
+
+                </div>
+
+                <video id="video" autoplay playsinline style="display:none"></video><div class="camera-controls" id="cameraControls" style="display:none"><div class="control-row"><button onclick="toggleProfessionalMode()">📷 专业模式</button><button onclick="setZoom(0)">广角</button><button onclick="setZoom(1)">1x</button><button onclick="setZoom(2)">2x</button></div><div class="control-row" id="exposureControls"><label>曝光:<input type="range" id="exposureSlider" min="-2" max="2" step="0.1" value="0" oninput="setExposure(this.value)"></label></div><div class="control-row"><button onclick="toggleHDR()">HDR</button><button onclick="toggleFocus()">对焦</button></div></div>
+
+            </div>
+
+            <div class="btn-group">
+
+                <button class="btn-primary" onclick="openCamera()">打开相机</button>
+
+                <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">相册选择</button>
+
+                <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none" onchange="handleFile(event)">
+
+            </div>
+
+            <div id="captureParams" class="params-box" style="display:none">
+
+                <h4>分析参数</h4>
+
+                <div class="param-row"><label>d (mm)</label><input type="number" id="param_d" value="0.5" step="0.01"></div>
+
+                <div class="param-row"><label>D (mm)</label><input type="number" id="param_D" value="500" step="1"></div>
+
+                <div class="param-row"><label>k (mm/px)</label><input type="number" id="param_k" step="0.0001" placeholder="先在标定页设置"></div>
+
+                <button class="btn-analyze" onclick="analyzeImage()">开始分析</button>
+
+            </div>
+
+            <div class="calibrate-method" style="margin-top:15px">
+
+                <h4>多帧平均分析</h4>
+
+                <p style="font-size:11px;color:#888;margin-bottom:10px">选择2-20张条纹图像，自动计算平均条纹间距</p>
+
+                <input type="file" id="multiframeFile" accept="image/*" multiple style="margin-bottom:10px">
+
+                <button class="btn-calc" onclick="analyzeMultipleFrames()">多帧分析</button>
+
+                <button class="btn-secondary" onclick="clearFrameResults()" style="margin-top:8px">清除结果</button>
+
+            </div>
+
+            <div id="multiframeResult" class="result-box" style="display:none"></div>
+
+            <div id="captureResult" class="result-box" style="display:none"></div>
+
+        </div>
+
+
+
+        <div id="calibrate" class="tab-page">
+
+            <h3>像素当量标定</h3>
+
+            <div class="info-card"><p>拍摄标准刻度尺或光栅，输入已知尺寸进行标定</p></div>
+
+            <div class="calibrate-method">
+
+                <h4>方法一：直接输入</h4>
+
+                <div class="param-row"><label>像素当量 k (mm/px)</label><input type="number" id="cal_k" step="0.0001" placeholder="如 0.008"></div>
+
+                <button class="btn-save" onclick="saveK()">保存</button>
+
+            </div>
+
+            <div class="calibrate-method">
+
+                <h4>方法二：已知尺寸计算</h4>
+
+                <div class="param-row"><label>已知长度 L (mm)</label><input type="number" id="cal_L" step="0.01" placeholder="如 1.0"></div>
+
+                <div class="param-row"><label>对应像素数 N</label><input type="number" id="cal_N" step="1" placeholder="如 125"></div>
+
+                <button class="btn-calc" onclick="calcK()">计算</button>
+
+            </div>
+
+            <div class="calibrate-method">
+
+                <h4>方法三：分划板自动识别</h4>
+
+                <p style="font-size:11px;color:#888;margin-bottom:10px">拍摄测微目镜分划板图像，自动识别刻度线位置</p>
+
+                <input type="file" id="reticleFile" accept="image/*" style="margin-bottom:10px">
+
+                <div class="param-row"><label>分划板刻度 (mm)</label><input type="number" id="scale_division" value="0.01" step="0.001"></div>
+
+                <button class="btn-calc" onclick="analyzeReticle()">分析分划板</button>
+
+            </div>
+
+            <div id="reticleResult" class="result-box" style="display:none"></div>
+
+            <div id="calResult" class="result-box"></div>
+
+            <div class="calibrate-method" style="margin-top:15px">
+
+                <h4>增强不确定度评定</h4>
+
+                <p style="font-size:11px;color:#888;margin-bottom:10px">输入几何量测量值及其不确定度</p>
+
+                <div class="param-row"><label>d (mm)</label><input type="number" id="unc_d" value="0.5" step="0.01"></div>
+
+                <div class="param-row"><label>u(d) (mm)</label><input type="number" id="unc_u_d" step="0.001" placeholder="默认0.2%"></div>
+
+                <div class="param-row"><label>D (mm)</label><input type="number" id="unc_D" value="500" step="1"></div>
+
+                <div class="param-row"><label>u(D) (mm)</label><input type="number" id="unc_u_D" step="0.1" placeholder="默认0.3%"></div>
+
+                <div class="param-row"><label>条纹间距 (px)</label><input type="number" id="unc_fringe" step="0.1"></div>
+
+                <div class="param-row"><label>u(条纹) (px)</label><input type="number" id="unc_u_fringe" step="0.01" placeholder="默认亚像素"></div>
+
+                <button class="btn-calc" onclick="calcUncertaintyEnhanced()">计算不确定度</button>
+
+            </div>
+
+            <div id="enhancedUncResult" class="result-box" style="display:none"></div>
+
+            <div class="current-k">
+
+                <h4>当前像素当量</h4>
+
+                <p id="currentK" class="k-display">未标定</p>
+
+                <button class="btn-clear" onclick="clearK()">清除标定</button>
+
+            </div>
+
+        </div>
+
+
+
+        <div id="analysis" class="tab-page">
+
+            <h3>数据处理</h3>
+
+            <div class="upload-section">
+
+                <h4>数据上传</h4>
+
+                <input type="file" id="uploadFile" accept=".csv,.json" style="display:none" onchange="uploadData(event)">
+
+                <button class="btn-upload" onclick="document.getElementById('uploadFile').click()">选择文件上传</button>
+
+                <div id="uploadResult" class="result-box" style="display:none"></div>
+
+            </div>
+
+            <div class="data-table-container">
+
+                <table class="data-table">
+
+                    <thead><tr><th>序号</th><th>d (mm)</th><th>D (mm)</th><th>条纹间距(px)</th><th>波长(nm)</th><th>操作</th></tr></thead>
+
+                    <tbody id="dataTableBody">
+
+                        <tr><td>1</td><td><input type="number" value="0.5" step="0.01"></td><td><input type="number" value="500" step="1"></td><td><input type="number" id="dx1" step="0.1"></td><td id="wl1" readonly></td><td><button onclick="calcWavelength(1)">计算</button></td></tr>
+
+                        <tr><td>2</td><td><input type="number" value="0.5" step="0.01"></td><td><input type="number" value="500" step="1"></td><td><input type="number" id="dx2" step="0.1"></td><td id="wl2" readonly></td><td><button onclick="calcWavelength(2)">计算</button></td></tr>
+
+                        <tr><td>3</td><td><input type="number" value="0.5" step="0.01"></td><td><input type="number" value="500" step="1"></td><td><input type="number" id="dx3" step="0.1"></td><td id="wl3" readonly></td><td><button onclick="calcWavelength(3)">计算</button></td></tr>
+
+                    </tbody>
+
+                </table>
+
+                <button class="btn-add" onclick="addRow()">+ 添加行</button>
+
+                <button class="btn-calc-all" onclick="calcAll()">全部计算</button>
+
+                <button class="btn-export" onclick="exportData()">导出数据</button>
+
+                <button class="btn-delete-all" onclick="deleteAllData()">清空数据</button>
+
+            </div>
+
+            <div class="uncertainty-section">
+
+                <h4>不确定度评定</h4>
+
+                <div id="uncInputs" class="unc-inputs"></div>
+
+                <button class="btn-add" onclick="addUncInput()">+ 添加测量值</button>
+
+                <button class="btn-calc-unc" onclick="calcUncertainty()">计算不确定度</button>
+
+                <div id="uncResult" class="result-box" style="display:none"></div>
+
+            </div>
+
+            <div class="compare-section">
+
+                <h4>多路径加权合成</h4>
+
+                <div class="data-table-container">
+
+                    <table class="data-table" id="combineTable">
+
+                        <thead><tr><th>路径名称</th><th>波长(nm)</th><th>u_c(nm)</th><th>操作</th></tr></thead>
+
+                        <tbody>
+
+                            <tr><td><input type="text" class="combine-name" placeholder="基本公式" style="width:80px"></td><td><input type="number" class="combine-value" step="0.1"></td><td><input type="number" class="combine-unc" step="0.01"></td><td><button onclick="this.closest('tr').remove()">删除</button></td></tr>
+
+                            <tr><td><input type="text" class="combine-name" placeholder="比值法" style="width:80px"></td><td><input type="number" class="combine-value" step="0.1"></td><td><input type="number" class="combine-unc" step="0.01"></td><td><button onclick="this.closest('tr').remove()">删除</button></td></tr>
+
+                        </tbody>
+
+                    </table>
+
+                    <button class="btn-add" onclick="addCombineRow()">+ 添加路径</button>
+
+                    <button class="btn-calc-all" onclick="calcWeightedCombine()">执行加权合成</button>
+
+                </div>
+
+                <div id="combineResult" class="result-box" style="display:none"></div>
+
+            </div>
+
+        </div>
+
+
+
+        <div id="guide" class="tab-page">
+
+            <h3>使用指南</h3>
+
+            <div class="guide-card">
+
+                <h4>拍照要求</h4>
+
+                <ul>
+
+                    <li>条纹周期 ≥ 8 像素（建议 100-200 像素）</li>
+
+                    <li>关闭 HDR、美颜、锐化等自动功能</li>
+
+                    <li>使用专业模式锁定 ISO、快门、对焦</li>
+
+                    <li>直方图右侧不贴边（不过曝）</li>
+
+                    <li>用 1 倍主摄，不数码变焦</li>
+
+                </ul>
+
+            </div>
+
+            <div class="guide-card">
+
+                <h4>像素标定步骤</h4>
+
+                <ol>
+
+                    <li>拍摄标准刻度尺或光栅图像</li>
+
+                    <li>数出已知长度对应的像素数</li>
+
+                    <li>计算 k = L/N (mm/px)</li>
+
+                    <li>标定后不得变焦或改变拍摄距离</li>
+
+                </ol>
+
+            </div>
+
+            <div class="guide-card">
+
+                <h4>波长计算公式</h4>
+
+                <p class="formula">λ = d × Δx / D</p>
+
+                <p>其中：d=虚光源间距，Δx=条纹间距，D=观察距离</p>
+
+                <p class="formula">λ = λ₀ × (Δx_钠 / Δx_激光) × 1.004</p>
+
+                <p>比值法（含 BK7 色散修正 0.4%）</p>
+
+            </div>
+
+            <div class="guide-card">
+
+                <h4>注意事项</h4>
+
+                <ul>
+
+                    <li>整组数据必须同一相机参数</li>
+
+                    <li>标定后不得变焦或切换镜头</li>
+
+                    <li>不要用社交软件传输图片（会压缩）</li>
+
+                    <li>建议连拍 20-50 帧取平均</li>
+
+                </ul>
+
+            </div>
+
+        </div>
+
+
+
+        <div id="loading" class="loading" style="display:none">
+
+            <div class="spinner"></div>
+
+            <p>处理中...</p>
+
+        </div>
+
+    </div>
+
+    <script src="js/mobile_merged.js?v=1"></script>
+
+</body>
+
+</html>
+
+
+<script>
+// 移动端添加光学模拟入口
+function openOptical() {
+    window.location.href = "optical.html";
+}
+</script>
+
+
+
+
+
+
+
+
+
