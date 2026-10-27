@@ -17,7 +17,7 @@ function toggleProfessionalMode() {
 }
 
 // 设置变焦
-async function setZoom(level) {
+ setZoom(level) {
     if (!videoTrack) return;
     
     const capabilities = videoTrack.getCapabilities();
@@ -32,7 +32,7 @@ async function setZoom(level) {
     
     currentZoom = min + level * step;
     try {
-        await videoTrack.applyConstraints({
+        videoTrack.applyConstraints({
             advanced: [{ zoom: currentZoom }]
         });
     } catch(e) {
@@ -41,12 +41,12 @@ async function setZoom(level) {
 }
 
 // 设置曝光
-async function setExposure(value) {
+ setExposure(value) {
     if (!videoTrack) return;
     
     currentExposure = parseFloat(value);
     try {
-        await videoTrack.applyConstraints({
+        videoTrack.applyConstraints({
             advanced: [{ exposureCompensation: currentExposure }]
         });
     } catch(e) {
@@ -55,7 +55,7 @@ async function setExposure(value) {
 }
 
 // HDR开关
-async function toggleHDR() {
+ toggleHDR() {
     if (!videoTrack) return;
     
     const capabilities = videoTrack.getCapabilities();
@@ -69,13 +69,13 @@ async function toggleHDR() {
 }
 
 // 对焦
-async function toggleFocus() {
+ toggleFocus() {
     if (!videoTrack) return;
     
     const capabilities = videoTrack.getCapabilities();
     if (capabilities.focusMode) {
         try {
-            await videoTrack.applyConstraints({
+            videoTrack.applyConstraints({
                 advanced: [{ focusMode: "continuous" }]
             });
             showAlert("连续对焦已开启");
@@ -88,11 +88,11 @@ async function toggleFocus() {
 }
 
 // 应用相机设置
-async function applyCameraSettings() {
+ applyCameraSettings() {
     if (!videoTrack) return;
     
     try {
-        await videoTrack.applyConstraints({
+        videoTrack.applyConstraints({
             advanced: [
                 { zoom: currentZoom },
                 { exposureCompensation: currentExposure }
@@ -104,7 +104,7 @@ async function applyCameraSettings() {
 }
 
 // 获取相机信息
-async function getCameraInfo() {
+ getCameraInfo() {
     if (!videoTrack) return;
     
     const settings = videoTrack.getSettings();
@@ -121,11 +121,11 @@ async function getCameraInfo() {
 }
 
 // 使用ImageCapture拍照（更高质量）
-async function captureWithImageCapture() {
+ captureWithImageCapture() {
     if (!imageCapture) return null;
     
     try {
-        const blob = await imageCapture.takePhoto({
+        const blob = imageCapture.takePhoto({
             facingMode: "environment",
             brightness: 0,
             exposureTime: 1/60
@@ -149,10 +149,10 @@ function captureFromVideo() {
 }
 
 // 修改原有的openCamera函数
-async function openCamera() {
+ openCamera() {
     try {
         const video = document.getElementById("video");
-        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+        cameraStream = navigator.mediaDevices.getUserMedia({ 
             video: {
                 facingMode: "environment",
                 width: { ideal: 1920 },
@@ -178,8 +178,8 @@ async function openCamera() {
         document.getElementById("cameraControls").style.display = "block";
         
         // 等待相机启动后获取信息
-        video.addEventListener("loadedmetadata", async function() {
-            await getCameraInfo();
+        video.addEventListener("loadedmetadata", () {
+            getCameraInfo();
         }, { once: true });
         
     } catch(e) { 
@@ -188,10 +188,10 @@ async function openCamera() {
 }
 
 // 修改拍照函数
-async function triggerCamera() {
+function triggerCamera() {
     if (cameraStream) {
         // 使用专业模式拍照
-        const dataUrl = await captureWithImageCapture();
+        const dataUrl = captureWithImageCapture();
         if (dataUrl) {
             handleCapturedImage(dataUrl);
         }
