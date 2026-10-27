@@ -38,9 +38,10 @@ function init() {
 }
 function resizeCanvas() { 
     const c = canvas.parentElement; 
-    canvas.width = c.clientWidth; 
-    canvas.height = c.clientHeight; 
-    CONFIG.railY = Math.floor(canvas.height / 2); 
+    canvas.width = c.clientWidth || 800;
+    canvas.height = c.clientHeight || 600;
+    CONFIG.railY = Math.floor(canvas.height / 2);
+    console.log("Canvas 尺寸:", canvas.width, "x", canvas.height, "railY:", CONFIG.railY);
     render(); 
 }
 function setupEvents() {
@@ -344,6 +345,7 @@ function simulateInterference() {
 window.simulateInterference = simulateInterference;
 window.updateParams = updateParams;
 window.alignToAxis = alignToAxis;
+
 
 
 
