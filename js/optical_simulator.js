@@ -18,16 +18,22 @@ const DEVICE_TYPES = {
 };
 
 function init() { 
+    console.log("init() 被调用");
     resizeCanvas(); 
     window.addEventListener("resize", resizeCanvas); 
     setupEvents(); 
-    // 延迟一点确保画布完全初始化后再添加元件
     setTimeout(() => {
+        console.log("添加默认设备...");
         devices = [];
         nextId = 1;
         selectedDevice = null;
         document.getElementById("selected").textContent = "无";
-        ["source", "slit", "prism", "screen"].forEach((type, i) => addDevice(type));
+        const defaultDevices = ["source", "slit", "prism", "screen"];
+        defaultDevices.forEach((type, i) => {
+            console.log("添加设备:", type);
+            addDevice(type);
+        });
+        console.log("设备总数:", devices.length);
     }, 100);
 }
 function resizeCanvas() { 
@@ -338,6 +344,7 @@ function simulateInterference() {
 window.simulateInterference = simulateInterference;
 window.updateParams = updateParams;
 window.alignToAxis = alignToAxis;
+
 
 
 
