@@ -256,11 +256,12 @@ function toggleLabels() { showLabels = document.getElementById("showLabels").che
 function toggleGrid() { showGridFlag = document.getElementById("showGrid").checked; render(); }
 
 function resetLayout() { 
-    devices = []; 
-    nextId = 1; 
-    selectedDevice = null; 
-    document.getElementById("selected").textContent = "无"; 
-    render(); 
+    devices = [];
+    nextId = 1;
+    selectedDevice = null;
+    document.getElementById("selected").textContent = "无";
+    // 自动添加默认实验装置
+    ["source", "slit", "prism", "screen"].forEach((type, i) => addDevice(type));
 }
 
 // 模拟干涉条纹
@@ -325,6 +326,7 @@ function simulateInterference() {
 window.simulateInterference = simulateInterference;
 window.updateParams = updateParams;
 window.alignToAxis = alignToAxis;
+
 
 
 
