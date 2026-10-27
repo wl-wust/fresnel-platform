@@ -1,0 +1,133 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>菲涅耳双棱镜干涉 - 光学模拟实验室</title>
+    <link rel="stylesheet" href="css/optical_v2.css">
+</head>
+<body>
+    <div class="header">
+        <h1>🔬 菲涅耳双棱镜干涉 · 光学模拟实验室</h1>
+        <div>
+            <a href="index.html" class="nav-btn">← 返回首页</a>
+            <a href="mobile.html" class="nav-btn">📱 手机版</a>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <!-- 左侧工具栏 -->
+        <div class="toolbar">
+            <h3>实验仪器</h3>
+            
+            <div class="tool-section">
+                <h4>添加元件</h4>
+                <button class="tool-btn active" onclick="addDevice('source')">
+                    <span class="tool-icon">💡</span>钠光灯
+                </button>
+                <button class="tool-btn" onclick="addDevice('slit')">
+                    <span class="tool-icon">🔲</span>单缝
+                </button>
+                <button class="tool-btn" onclick="addDevice('prism')">
+                    <span class="tool-icon">🔺</span>双棱镜
+                </button>
+                <button class="tool-btn" onclick="addDevice('lens')">
+                    <span class="tool-icon">🔍</span>凸透镜
+                </button>
+                <button class="tool-btn" onclick="addDevice('screen')">
+                    <span class="tool-icon">📍</span>观察屏
+                </button>
+            </div>
+            
+            <div class="tool-section">
+                <h4>预设场景</h4>
+                <div class="preset-grid">
+                    <button class="preset-btn" onclick="loadPreset('fig2a')">图2a (b=0.02)</button>
+                    <button class="preset-btn" onclick="loadPreset('fig2b')">图2b (b=0.04)</button>
+                    <button class="preset-btn" onclick="loadPreset('fig3a')">图3a (z₁=10)</button>
+                    <button class="preset-btn" onclick="loadPreset('fig3b')">图3b (z₁=20)</button>
+                    <button class="preset-btn" onclick="loadPreset('exp_a')">实验a</button>
+                    <button class="preset-btn" onclick="loadPreset('exp_b')">实验b</button>
+                    <button class="preset-btn" onclick="loadPreset('fig6a')">图6a</button>
+                    <button class="preset-btn" onclick="loadPreset('fig6b')">图6b</button>
+                </div>
+            </div>
+            
+            <div class="tool-section">
+                <h4>显示选项</h4>
+                <label class="tool-btn" style="justify-content: flex-start;">
+                    <input type="checkbox" id="showLight" checked onchange="toggleLight()"> 显示光路
+                </label>
+                <label class="tool-btn" style="justify-content: flex-start;">
+                    <input type="checkbox" id="showLabels" checked onchange="toggleLabels()"> 显示标签
+                </label>
+                <label class="tool-btn" style="justify-content: flex-start;">
+                    <input type="checkbox" id="showGrid" onchange="toggleGrid()"> 显示网格
+                </label>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="simulateInterference()">▶ 运行仿真</button>
+                <button class="btn btn-secondary" onclick="resetLayout()">↺ 重置</button>
+            </div>
+        </div>
+        
+        <!-- 中间画布 -->
+        <div class="canvas-area">
+            <canvas id="opticalCanvas"></canvas>
+            
+            <div class="canvas-overlay">
+                <div class="canvas-info">
+                    <div class="info-item"><span class="info-label">坐标:</span><span class="info-value" id="coords">-</span></div>
+                    <div class="info-item"><span class="info-label">选中:</span><span class="info-value" id="selected">无</span></div>
+                </div>
+            </div>
+            
+            <div class="canvas-footer">
+                <span>拖拽元件调整位置 | 右键删除 | 滚轮缩放</span>
+                <span id="scaleInfo">缩放: 100%</span>
+            </div>
+        </div>
+        
+        <!-- 右侧参数面板 -->
+        <div class="params-panel">
+            <h3>实验参数</h3>
+            
+            <div class="param-group">
+                <h4>🔬 光学参数</h4>
+                <div class="param-row"><span class="param-label">波长 λ</span><div><input type="number" class="param-input" id="lambda" value="589.3" step="0.1" onchange="updateParams()"><span class="param-unit">nm</span></div></div>
+                <div class="param-row"><span class="param-label">折射率 n</span><div><input type="number" class="param-input" id="n" value="1.52" step="0.001" onchange="updateParams()"></div></div>
+                <div class="param-row"><span class="param-label">顶角 β</span><div><input type="number" class="param-input" id="beta" value="0.75" step="0.01" onchange="updateParams()"><span class="param-unit">度</span></div></div>
+            </div>
+            
+            <div class="param-group">
+                <h4>📐 几何参数</h4>
+                <div class="param-row"><span class="param-label">狭缝宽度 b</span><div><input type="number" class="param-input" id="b" value="0.02" step="0.01" onchange="updateParams()"><span class="param-unit">mm</span></div></div>
+                <div class="param-row"><span class="param-label">物距 z₁</span><div><input type="number" class="param-input" id="z1" value="10" step="1" onchange="updateParams()"><span class="param-unit">mm</span></div></div>
+                <div class="param-row"><span class="param-label">像距 z₂</span><div><input type="number" class="param-input" id="z2" value="640" step="10" onchange="updateParams()"><span class="param-unit">mm</span></div></div>
+            </div>
+            
+            <div class="param-group">
+                <h4>📊 计算结果</h4>
+                <div class="result-box">
+                    <div class="result-row"><span>虚光源间距 d</span><span class="result-value" id="result_d">-</span></div>
+                    <div class="result-row"><span>条纹间距 Δx</span><span class="result-value" id="result_dx">-</span></div>
+                    <div class="result-row"><span>总距离 D</span><span class="result-value" id="result_D">-</span></div>
+                    <div class="result-row"><span>放大率 M</span><span class="result-value" id="result_M">-</span></div>
+                </div>
+            </div>
+            
+            <div id="fringeResult" style="display:none; margin-top:15px;">
+                <h3>干涉条纹</h3>
+                <canvas id="fringeCanvas" width="260" height="150" style="width:100%; border-radius:8px; background:#000;"></canvas>
+                <div class="result-box" style="margin-top:10px;">
+                    <div class="result-row"><span>理论条纹间距</span><span class="result-value" id="theoretical_dx">-</span></div>
+                    <div class="result-row"><span>可见度 V</span><span class="result-value" id="visibility">-</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/optical_simulator.js"></script>
+</body>
+</html>
