@@ -1,0 +1,120 @@
+/* Mobile CSS - 稳定性优化版 */
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0a0a1a; color:#fff; min-height:100vh; }
+.app-container { max-width:480px; margin:0 auto; min-height:100vh; background:linear-gradient(180deg,#1a1a2e 0%,#0a0a1a 100%); }
+.app-header { text-align:center; padding:25px 15px; background:rgba(0,212,255,0.15); border-bottom:1px solid rgba(0,212,255,0.3); position:relative; }
+.app-header h1 { font-size:20px; color:#00d4ff; }
+.app-header .subtitle { font-size:12px; color:#888; margin-top:5px; }
+.tab-nav { display:flex; background:rgba(255,255,255,0.05); position:sticky; top:0; z-index:100; }
+.tab-btn { flex:1; padding:12px 5px; background:none; border:none; color:#888; font-size:13px; cursor:pointer; transition:all 0.3s; }
+.tab-btn.active { color:#00d4ff; border-bottom:2px solid #00d4ff; background:rgba(0,212,255,0.1); }
+.tab-btn:disabled { opacity:0.5; cursor:not-allowed; }
+.tab-page { display:none; padding:15px; animation:fadeIn 0.3s; }
+.tab-page.active { display:block; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+
+/* 相机区域 */
+.camera-area { margin-bottom:15px; }
+.preview-box { width:100%; height:200px; background:rgba(255,255,255,0.05); border:2px dashed rgba(0,212,255,0.5); border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all 0.3s; }
+.preview-box:hover { border-color:#00d4ff; background:rgba(0,212,255,0.1); }
+.preview-icon { font-size:40px; margin-bottom:10px; }
+.preview-box p { color:#888; font-size:13px; }
+.preview-box .hint { font-size:11px; color:#666; margin-top:5px; }
+#previewBox img { width:100%; height:200px; object-fit:cover; border-radius:8px; }
+
+/* 按钮样式 */
+.btn-group { display:flex; gap:10px; margin-bottom:15px; }
+.btn-primary, .btn-secondary, .btn-save, .btn-calc, .btn-analyze, .btn-add, .btn-calc-all, .btn-calc-unc, .btn-compare, .btn-upload, .btn-delete-all, .btn-export { 
+    padding:12px; border-radius:20px; border:none; font-size:14px; cursor:pointer; transition:all 0.3s; 
+}
+.btn-primary, .btn-save, .btn-calc, .btn-analyze, .btn-calc-all { background:linear-gradient(135deg,#00d4ff,#7b2cbf); color:#fff; }
+.btn-secondary, .btn-upload, .btn-delete-all, .btn-export { background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.2); }
+.btn-primary:hover, .btn-save:hover, .btn-calc:hover, .btn-analyze:hover, .btn-calc-all:hover { transform:scale(1.02); box-shadow:0 4px 15px rgba(0,212,255,0.3); }
+.btn-secondary:hover, .btn-upload:hover, .btn-delete-all:hover, .btn-export:hover { background:rgba(255,255,255,0.15); }
+.btn-delete-all { background:rgba(255,80,80,0.2); border-color:#ff5050; color:#ff5050; }
+
+/* 参数框 */
+.params-box { background:rgba(255,255,255,0.05); border-radius:10px; padding:15px; margin-bottom:15px; }
+.params-box h4 { color:#00d4ff; margin-bottom:10px; font-size:14px; }
+.param-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.1); }
+.param-row:last-child { border-bottom:none; }
+.param-row label { font-size:13px; color:#aaa; }
+.param-row input { width:100px; padding:8px; background:rgba(0,0,0,0.3); border:1px solid #333; border-radius:5px; color:#fff; text-align:right; }
+.param-row input:focus { outline:none; border-color:#00d4ff; }
+
+/* 结果框 */
+.result-box { background:rgba(0,212,255,0.1); border-left:3px solid #00d4ff; border-radius:8px; padding:12px; margin-top:10px; }
+.result-box h4 { color:#00d4ff; margin-bottom:8px; font-size:14px; }
+.result-item { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.1); font-size:13px; }
+.result-item:last-child { border-bottom:none; }
+.result-label { color:#aaa; }
+.result-value { color:#fff; font-weight:bold; }
+.result-value.highlight { color:#00ff88; font-size:18px; }
+
+/* 标定区域 */
+h3 { color:#00d4ff; margin-bottom:15px; font-size:16px; }
+.info-card { background:rgba(255,255,255,0.05); border-radius:8px; padding:10px; margin-bottom:15px; font-size:12px; color:#888; }
+.calibrate-method { background:rgba(255,255,255,0.05); border-radius:10px; padding:12px; margin-bottom:12px; }
+.calibrate-method h4 { color:#00d4ff; margin-bottom:10px; font-size:13px; }
+
+/* 当前像素当量显示 */
+.current-k { text-align:center; padding:15px; background:rgba(0,255,136,0.1); border-radius:10px; margin-top:15px; }
+.current-k h4 { color:#00ff88; margin-bottom:8px; font-size:14px; }
+.k-display { font-size:24px; color:#00ff88; font-weight:bold; margin:8px 0; }
+
+/* 数据表格 */
+.data-table-container { margin-bottom:20px; }
+.data-table { width:100%; border-collapse:collapse; font-size:11px; }
+.data-table th { background:rgba(0,212,255,0.2); color:#00d4ff; padding:8px 3px; text-align:center; }
+.data-table td { padding:6px 3px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.1); }
+.data-table input { width:50px; padding:5px; background:rgba(0,0,0,0.3); border:1px solid #333; border-radius:3px; color:#fff; text-align:center; font-size:11px; }
+.data-table button { padding:4px 8px; background:rgba(0,212,255,0.3); border:none; border-radius:10px; color:#00d4ff; font-size:10px; cursor:pointer; transition:all 0.2s; }
+.data-table button:hover { background:rgba(0,212,255,0.5); }
+
+/* 不确定度和合成区域 */
+.uncertainty-section, .compare-section { background:rgba(255,255,255,0.05); border-radius:10px; padding:12px; margin-bottom:15px; }
+.uncertainty-section h4, .compare-section h4 { color:#00d4ff; margin-bottom:10px; font-size:14px; }
+.unc-inputs, .path-inputs { margin:10px 0; }
+.unc-inputs input, .path-inputs input { width:100%; padding:8px; margin:5px 0; background:rgba(0,0,0,0.3); border:1px solid #333; border-radius:5px; color:#fff; }
+
+/* 指南卡片 */
+.guide-card { background:rgba(255,255,255,0.05); border-radius:10px; padding:12px; margin-bottom:12px; }
+.guide-card h4 { color:#00d4ff; margin-bottom:8px; font-size:14px; }
+.guide-card ul, .guide-card ol { padding-left:18px; font-size:12px; color:#ccc; }
+.guide-card li { padding:3px 0; }
+.guide-card p { font-size:12px; color:#aaa; line-height:1.6; }
+.formula { background:rgba(0,212,255,0.1); padding:8px; border-radius:5px; text-align:center; font-size:14px; color:#00d4ff; margin:8px 0; }
+
+/* 加载和错误状态 */
+.loading { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999; }
+.spinner { width:35px; height:35px; border:3px solid rgba(0,212,255,0.3); border-top-color:#00d4ff; border-radius:50%; animation:spin 1s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg);} }
+.loading p { margin-top:12px; color:#00d4ff; font-size:14px; }
+
+.error-toast { position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#ff5050;color:#fff;padding:12px 24px;border-radius:8px;z-index:10000;animation:slideDown 0.3s;font-size:14px;box-shadow:0 4px 12px rgba(255,80,80,0.3); }
+@keyframes slideDown { from{opacity:0;transform:translateX(-50%) translateY(-20px);} to{opacity:1;transform:translateX(-50%) translateY(0);} }
+
+/* UI切换按钮 */
+.btn-switch{position:fixed;top:10px;right:10px;padding:8px 15px;background:rgba(0,212,255,0.3);border:1px solid #00d4ff;border-radius:15px;color:#00d4ff;font-size:12px;cursor:pointer;z-index:999;transition:all 0.3s;}
+.btn-switch:hover { background:rgba(0,212,255,0.5); }
+
+/* 上传区域 */
+.upload-section { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 15px; }
+.upload-section h4 { color: #00d4ff; margin-bottom: 8px; font-size: 14px; }
+
+/* 禁用状态 */
+button:disabled { opacity:0.5; cursor:not-allowed; }
+
+.btn-optical-mobile { display: block; margin: 10px 0; padding: 12px; background: rgba(123,44,191,0.2); border: 1px solid #7b2cbf; border-radius: 10px; color: #7b2cbf; text-align: center; text-decoration: none; font-size: 14px; }
+
+/* 专业相机控制 */
+.camera-controls { background: rgba(0,0,0,0.8); border-radius: 15px; padding: 15px; margin-top: 10px; }
+.control-row { display: flex; justify-content: center; gap: 10px; margin: 8px 0; }
+.control-row button { padding: 8px 16px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; color: #fff; font-size: 12px; cursor: pointer; }
+.control-row button.active { background: #00d4ff; color: #000; }
+.control-row label { color: #fff; font-size: 12px; display: flex; align-items: center; gap: 10px; }
+.control-row input[type="range"] { width: 100px; }
+.camera-info { background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.3); border-radius: 8px; padding: 10px; margin-top: 10px; font-size: 11px; color: #00d4ff; }
+.camera-info div { margin: 3px 0; }
+/* 相机兼容性提示 */
+.camera-hint { background: rgba(255,170,0,0.1); border: 1px solid #ffaa00; border-radius: 8px; padding: 10px; margin: 10px 0; font-size: 12px; color: #ffaa00; }

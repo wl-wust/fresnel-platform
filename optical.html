@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>光学导轨模拟 - 菲涅耳双棱镜</title>
+    <link rel="stylesheet" href="css/optical.css">
+</head>
+<body>
+    <div class="optical-container">
+        <header>
+            <button class="btn-back" onclick="window.location.href='/'">返回主页</button>
+            <h1>菲涅耳双棱镜实验 - 光路模拟器</h1>
+            <p>点击拖拽移动元件 | 右键删除 | 左侧工具栏添加装置</p>
+        </header>
+
+        <div class="main-layout">
+            <div class="canvas-container">
+                <canvas id="opticalCanvas"></canvas>
+                <div class="canvas-info">
+                    <span id="coords">坐标: -</span>
+                    <span id="selected">未选择</span>
+                </div>
+            </div>
+
+            <div class="control-panel">
+                <h3>🔧 添加装置</h3>
+                <div class="tool-grid">
+                    <button class="tool-btn" onclick="addDevice('source')" title="钠光灯/激光">💡 光源</button>
+                    <button class="tool-btn" onclick="addDevice('slit')" title="可调单缝">🔲 单缝</button>
+                    <button class="tool-btn" onclick="addDevice('prism')" title="菲涅耳双棱镜">🔺 双棱镜</button>
+                    <button class="tool-btn" onclick="addDevice('lens')" title="凸透镜">🔍 凸透镜</button>
+                    <button class="tool-btn" onclick="addDevice('aperture')" title="圆孔光阑">⭕ 光阑</button>
+                    <button class="tool-btn" onclick="addDevice('screen')" title="观察屏/测微目镜">📍 观察屏</button>
+                    <button class="tool-btn" onclick="addDevice('ruler')" title="刻度尺">📏 刻度尺</button>
+                    <button class="tool-btn" onclick="addDevice('micrometer')" title="手机摄像头">🔬 测微目镜</button>
+                </div>
+
+                <h3>📊 当前参数</h3>
+                <div class="info-panel">
+                    <div class="param-row"><span>物距 S:</span><span id="param_S">-</span></div>
+                    <div class="param-row"><span>像距 L:</span><span id="param_L">-</span></div>
+                    <div class="param-row"><span>总距离 D:</span><span id="param_D">-</span></div>
+                </div>
+
+                <h3>🎨 显示选项</h3>
+                <label class="toggle-label"><input type="checkbox" id="showLight" checked onchange="toggleLight()"> 显示光路</label>
+                <label class="toggle-label"><input type="checkbox" id="showRays" onchange="toggleRays()"> 显示光线</label>
+                <label class="toggle-label"><input type="checkbox" id="showLabels" checked onchange="toggleLabels()"> 显示标签</label>
+
+                <div class="action-buttons">
+                    <button class="btn-primary" onclick="simulateInterference()">模拟干涉条纹</button>
+                    <button class="btn-secondary" onclick="resetLayout()">重置布局</button>
+                    <button class="btn-danger" onclick="clearAll()">清空画布</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="interferencePanel" style="display:none">
+            <h3>干涉条纹模拟</h3>
+            <canvas id="fringeCanvas" width="600" height="150" style="background:#000;border-radius:10px"></canvas>
+            <button onclick="document.getElementById('interferencePanel').style.display='none'">关闭</button>
+        </div>
+    </div>
+    <script src="js/optical2d.js?v=3" defer></script>
+</body>
+</html>
+
+
+
+
+
