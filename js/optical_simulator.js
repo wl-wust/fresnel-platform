@@ -265,60 +265,66 @@ function resetLayout() {
 
 // 模拟干涉条纹
 function simulateInterference() { 
-    const lambda = parseFloat(document.getElementById("lambda").value) * 1e-6, 
-          n = parseFloat(document.getElementById("n").value), 
-          beta = parseFloat(document.getElementById("beta").value) * Math.PI / 180, 
-          b = parseFloat(document.getElementById("b").value), 
-          z1 = parseFloat(document.getElementById("z1").value), 
-          z2 = parseFloat(document.getElementById("z2").value); 
+    const lambda_nm = parseFloat(document.getElementById("lambda").value);
+    const n = parseFloat(document.getElementById("n").value);
+    const beta_deg = parseFloat(document.getElementById("beta").value);
+    const b = parseFloat(document.getElementById("b").value);
+    const z1 = parseFloat(document.getElementById("z1").value);
+    const z2 = parseFloat(document.getElementById("z2").value);
     
-    const d = 2 * z1 * (n - 1) * beta * 1000; 
-    const D = z1 + z2; 
-    const dx = lambda * D / d * 1000; 
+    // 参数转换 (统一单位)
+    const lambda_mm = lambda_nm * 1e-6;
+    const beta_rad = beta_deg * Math.PI / 180;
+    const D = z1 + z2;
+    const d = 2 * z1 * (n - 1) * beta_rad;  // 虚光源间距 (mm)
+    const delta_x = lambda_mm * D / d * 1000;  // 条纹间距 (mm)
     
-    const fringeCanvas = document.getElementById("fringeCanvas"); 
-    const fctx = fringeCanvas.getContext("2d"); 
-    const W = fringeCanvas.width, H = fringeCanvas.height; 
+    document.getElementById("result_d").textContent = (d * 1000).toFixed(3) + " mm";
+    document.getElementById("result_dx").textContent = delta_x.toFixed(3) + " mm";
+    document.getElementById("result_D").textContent = D.toFixed(0) + " mm";
     
-    // 清空画布
-    fctx.fillStyle = "#000"; 
-    fctx.fillRect(0, 0, W, H); 
+    // 绘制干涉条纹
+    const fringeCanvas = document.getElementById("fringeCanvas");
+    const fctx = fringeCanvas.getContext("2d");
+    const W = fringeCanvas.width, H = fringeCanvas.height;
     
-    // 计算干涉强度分布
-    const x = Array.from({ length: W }, (_, i) => (i - W / 2) * 0.05); 
-    const a1 = x.map(xi => Math.PI * b * xi / (lambda * D * 1000)); 
-    const envelope = a1.map(a => a === 0 ? 1 : (Math.sin(a) / a) ** 2); 
-    const a2 = x.map(xi => Math.PI * z1 * (n - 1) * beta * xi / (lambda * D * 1000)); 
-    const I = envelope.map((env, i) => env * (Math.cos(a2[i]) ** 2)); 
+    fctx.fillStyle = "#000";
+    fctx.fillRect(0, 0, W, H);
     
+    // 空间坐标 (mm)，范围 -20 到 20
+    const xMax = 20;
+    const x = Array.from({length: W}, (_, i) => (i / W) * 2 * xMax - xMax);
+    
+    // 包络函数 (单缝衍射)
+    const a1 = x.map(xi => Math.PI * b * xi / (lambda_mm * D));
+    const envelope = a1.map(a => a === 0 ? 1 : (Math.sin(a) / a) ** 2);
+    
+    // 干涉项 (双光束干涉)
+    const a2 = x.map(xi => Math.PI * d * xi / (lambda_mm * D));
+    const interference = a2.map(a => Math.cos(a) ** 2);
+    
+    // 总强度
+    const I = envelope.map((env, i) => env * interference[i]);
     const Imax = Math.max(...I);
     
-    // 绘制干涉条纹（水平条带）
+    // 绘制条纹
     for (let px = 0; px < W; px++) {
         const intensity = I[px] / Imax;
         const brightness = Math.floor(intensity * 255);
-        
-        // 从上到下填充整个高度
-        fctx.fillStyle = `rgb(${brightness}, ${brightness}, ${Math.min(255, brightness + 50)})`;
+        fctx.fillStyle = `rgb(${brightness}, ${brightness}, ${Math.min(255, brightness + 30)})`;
         fctx.fillRect(px, 0, 1, H);
     }
     
-    document.getElementById("theoretical_dx").textContent = dx.toFixed(3) + " mm"; 
-    const visibility = ((Math.max(...I) - Math.min(...I)) / (Math.max(...I) + Math.min(...I))) * 100; 
-    document.getElementById("visibility").textContent = visibility.toFixed(1) + "%"; 
-    document.getElementById("fringeResult").style.display = "block"; 
+    // 显示结果
+    document.getElementById("theoretical_dx").textContent = delta_x.toFixed(3) + " mm";
+    const visibility = ((Math.max(...I) - Math.min(...I)) / (Math.max(...I) + Math.min(...I))) * 100;
+    document.getElementById("visibility").textContent = Math.min(100, Math.max(0, visibility)).toFixed(1) + "%";
+    document.getElementById("fringeResult").style.display = "block";
 }
 
-window.onload = init;
-window.addDevice = addDevice;
-window.deleteDevice = deleteDevice;
-window.loadPreset = loadPreset;
-window.toggleLight = toggleLight;
-window.toggleLabels = toggleLabels;
-window.toggleGrid = toggleGrid;
-window.resetLayout = resetLayout;
 window.simulateInterference = simulateInterference;
 window.updateParams = updateParams;
 window.alignToAxis = alignToAxis;
+
 
 
