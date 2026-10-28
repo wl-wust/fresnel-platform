@@ -367,3 +367,5 @@ window.alignToAxis = alignToAxis;
 
 window.addEventListener('DOMContentLoaded', function() { console.log('DOM 加载，调用 init()...'); init(); }); window.addEventListener('load', function() { console.log('页面完全加载，再次调整画布...'); resizeCanvas(); });
 
+
+
