@@ -56,7 +56,19 @@ function getEventPos(e) { const r = canvas.getBoundingClientRect(); return { x: 
 function hitTest(x, y) { for (let i = devices.length - 1; i >= 0; i--) { const d = devices[i]; if (x >= d.x && x <= d.x + d.width && y >= d.y && y <= d.y + d.height) return d; } return null; }
 
 function onMouseDown(e) { e.preventDefault(); const p = getEventPos(e); const dev = hitTest(p.x, p.y); if (dev) { selectedDevice = dev; isDragging = true; dragOffset.x = p.x - dev.x; dragOffset.y = p.y - dev.y; document.getElementById("selected").textContent = dev.name; render(); } else { selectedDevice = null; document.getElementById("selected").textContent = "无"; render(); } }
-function onMouseMove(e) { e.preventDefault(); const p = getEventPos(e); document.getElementById("coords").textContent = "(" + Math.round(p.x) + ", " + Math.round(p.y) + ")"; if (isDragging && selectedDevice) { selectedDevice.x = Math.max(0, Math.min(canvas.width - selectedDevice.width, p.x - dragOffset.x)); selectedDevice.y = Math.max(0, Math.min(canvas.height - selectedDevice.height, p.y - dragOffset.y)); render(); updateParams(); } }
+function onMouseMove(e) { 
+    e.preventDefault(); 
+    const p = getEventPos(e); 
+    document.getElementById("coords").textContent = "(" + Math.round(p.x) + ", " + Math.round(p.y) + ")"; 
+    if (isDragging && selectedDevice) { 
+        selectedDevice.x = Math.max(0, Math.min(canvas.width - selectedDevice.width, p.x - dragOffset.x)); 
+        selectedDevice.y = Math.max(0, Math.min(canvas.height - selectedDevice.height, p.y - dragOffset.y)); 
+        render(); 
+        updateParams(); 
+        // 拖拽时自动更新干涉图样
+        simulateInterference(); 
+    } 
+} }
 function onMouseUp() { isDragging = false; }
 
 function addDevice(type) { 
@@ -355,3 +367,4 @@ window.alignToAxis = alignToAxis;
 
 
 window.addEventListener('DOMContentLoaded', function() { console.log('DOM 加载，调用 init()...'); init(); }); window.addEventListener('load', function() { console.log('页面完全加载，再次调整画布...'); resizeCanvas(); });
+
