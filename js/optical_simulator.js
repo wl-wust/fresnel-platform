@@ -300,8 +300,7 @@ function simulateInterference() {
     const n = parseFloat(document.getElementById("n").value);
     const beta_deg = parseFloat(document.getElementById("beta").value);
     const b = parseFloat(document.getElementById("b").value);
-    const z1 = parseFloat(document.getElementById("z1").value);
-    const z2 = parseFloat(document.getElementById("z2").value);
+    const source = devices.find(d => d.type === "source"); const slit = devices.find(d => d.type === "slit"); const prism = devices.find(d => d.type === "prism"); const screen = devices.find(d => d.type === "screen"); const z1 = prism ? (prism.x - slit.x) : parseFloat(document.getElementById("z1").value); const z2 = screen ? (screen.x - prism.x) : parseFloat(document.getElementById("z2").value);
     
     // 参数转换 (统一单位)
     const lambda_mm = lambda_nm * 1e-6;
@@ -366,6 +365,7 @@ window.alignToAxis = alignToAxis;
 
 
 window.addEventListener('DOMContentLoaded', function() { console.log('DOM 加载，调用 init()...'); init(); }); window.addEventListener('load', function() { console.log('页面完全加载，再次调整画布...'); resizeCanvas(); });
+
 
 
 
