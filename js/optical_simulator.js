@@ -67,7 +67,7 @@ function onMouseMove(e) {
         updateParams(); 
         simulateInterference(); 
     } 
-} }
+}
 function onMouseUp() { isDragging = false; }
 
 function addDevice(type) { 
