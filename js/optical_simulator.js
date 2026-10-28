@@ -65,10 +65,9 @@ function onMouseMove(e) {
         selectedDevice.y = Math.max(0, Math.min(canvas.height - selectedDevice.height, p.y - dragOffset.y)); 
         render(); 
         updateParams(); 
-        // 拖拽时自动更新干涉图样
         simulateInterference(); 
     } 
-}
+} }
 function onMouseUp() { isDragging = false; }
 
 function addDevice(type) { 
@@ -367,5 +366,4 @@ window.alignToAxis = alignToAxis;
 
 
 window.addEventListener('DOMContentLoaded', function() { console.log('DOM 加载，调用 init()...'); init(); }); window.addEventListener('load', function() { console.log('页面完全加载，再次调整画布...'); resizeCanvas(); });
-
 
