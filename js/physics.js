@@ -394,7 +394,7 @@
   // 表 8.1 的 8 个分量（默认值 + 中文名 + 来源），界面可直接铺成输入表
   function budgetPreset() {
     return [
-      { key: 'dx',      label: 'u(Δx)/Δx',       source: '条纹提取（30 帧统计）',      relU: 0.0000006 },
+      { key: 'dx',      label: 'u(Δx)/Δx',       source: '条纹提取（30 帧统计）',      relU: 0.000006 },
       { key: 'a',       label: 'u(a)/a',         source: '单缝—棱脊距离（导轨）',      relU: 0.00100 },
       { key: 'A',       label: 'u(A)/A',         source: '折射棱角（自准直）',         relU: 0.00030 },
       { key: 'nMinus1', label: 'u(n)/(n−1)',     source: '折射率（最小偏向角，单支）', relU: 0.00059 },
