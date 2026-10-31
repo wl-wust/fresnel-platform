@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>菲涅耳双棱镜干涉 · 光学模拟实验室</title>
 <link rel="stylesheet" href="css/optical_v2.css?v=4">
+<link rel="stylesheet" href="css/optical-responsive.css?v=4">
 </head>
 <body>
   <div class="header">
@@ -52,6 +53,7 @@
       <div class="btn-group">
         <button class="btn btn-primary" onclick="simulateInterference()">▶ 运行仿真</button>
         <button class="btn btn-secondary" onclick="syncPanelFromDevices()">⊞ 拖拽位置反填 z₁/z₂</button>
+        <button class="btn btn-secondary" onclick="deleteSelected()">✕ 删除选中元件</button>
         <button class="btn btn-secondary" onclick="alignToAxis()">⊞ 水平对齐</button>
         <button class="btn btn-danger" onclick="resetLayout()">↺ 重置</button>
       </div>
@@ -121,5 +123,6 @@
   <script src="js/core/plot.js?v=4"></script>
   <script src="js/optical_simulator.js?v=4"></script>
   <script src="js/pages/optical-fix.js?v=4"></script>
+<script src="js/pages/optical-interact.js?v=4"></script>
 </body>
 </html>

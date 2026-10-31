@@ -56,6 +56,10 @@ const PAIRS = [
   ['pages/optical-fix.js',      'js/pages/optical-fix.js'],
   ['build/optical.html',       'optical.html'],
   ['tools/check-optical-numbers.js', 'tools/check-optical-numbers.js'],
+  ['pages/optical-interact.js',  'js/pages/optical-interact.js'],
+  ['css/optical-responsive.css', 'css/optical-responsive.css'],
+  ['tools/check-pages.js',    'tools/check-pages.js'],
+  ['tools/check-globals.js',  'tools/check-globals.js'],
   // 工具（缺一个就等于少一道防线）
   ['tools/check-ids.js',     'tools/check-ids.js'],
   ['tools/check-p1-html.js', 'tools/check-p1-html.js'],

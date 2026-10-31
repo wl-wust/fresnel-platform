@@ -1,0 +1,62 @@
+/* =========================================================================
+ * css/optical-responsive.css —— P3b：光学页的触摸与响应式（叠加层）
+ *
+ * 为什么是叠加而不是改写 optical_v2.css：
+ *   既有规则本身没错，缺的只是窄屏与触摸这两块。叠加可以整文件删掉回退，
+ *   也让 P6 的"CSS 合并"变成一次纯搬运。<link> 顺序必须在 optical_v2.css 之后。
+ * ========================================================================= */
+
+/* 触摸：拖元件时不要连带滚动页面；长按不要弹系统菜单 */
+#opticalCanvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* 窄屏：三栏挤成一团（原来 grid-template-columns: 260px 1fr 280px + height: calc(100vh-60px)） */
+@media (max-width: 900px) {
+  .main-container {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    height: auto;
+    min-height: 0;
+    gap: 10px;
+    padding: 10px;
+  }
+  .toolbar,
+  .params-panel {
+    max-height: none;
+    overflow: visible;
+  }
+  .canvas-area {
+    height: 45vh;
+    min-height: 260px;
+    order: -1;            /* 手机上先看画布，再滑到工具与参数 */
+  }
+  .preset-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  /* 触控目标不小于 40px（WCAG 2.5.5 的建议下限） */
+  .tool-btn,
+  .preset-btn,
+  .btn,
+  button {
+    min-height: 40px;
+  }
+  .param-input {
+    width: 100%;
+  }
+  .canvas-footer {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 520px) {
+  .preset-grid {
+    grid-template-columns: 1fr;
+  }
+  .canvas-area {
+    height: 40vh;
+  }
+}
