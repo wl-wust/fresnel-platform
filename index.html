@@ -32,10 +32,12 @@
       <div class="upload-area">
         <input type="file" id="imageInput" accept="image/*">
         <button onclick="analyzeImage()">开始分析</button>
+        <button onclick="fringeSelfTest()">内含自检：生成已知条纹并提取</button>
         <p class="hint">支持 JPG/PNG，建议条纹周期 ≥ 8 像素</p>
       </div>
       <div class="result-panel" id="analysisResult"></div>
     </div>
+    <div id="fringeSelfTestResult" class="result-box"></div>
     <div class="chart-container" id="fringeChartContainer" style="display:none">
       <canvas id="fringeChart"></canvas>
     </div>
@@ -190,8 +192,11 @@
     <div class="history-controls">
       <button onclick="clearHistory()">清空记录</button>
       <button onclick="exportHistory()">导出记录</button>
+      <button onclick="importPhoneRecord()">导入手机记录</button>
+      <input type="file" id="phoneRecordFile" accept=".json,application/json" style="display:none" onchange="handlePhoneRecord(event)">
     </div>
     <div id="historyList" class="history-list"></div>
+    <div id="phoneRecordResult" class="result-box"></div>
   </div>
 
 </div>
@@ -202,8 +207,10 @@
 <script src="js/core/store.js?v=4"></script>
 <script src="js/core/fit.js?v=4"></script>
 <script src="js/core/plot.js?v=4"></script>
+<script src="js/core/fringe.js?v=4"></script>
 <script src="js/core/api.js?v=4"></script>
 <script src="js/pages/pc.js?v=4"></script>
 <script src="js/pages/pc-unc.js?v=4"></script>
+<script src="js/pages/pc-fringe.js?v=4"></script>
 </body>
 </html>

@@ -63,6 +63,10 @@ const PAIRS = [
   ['pages/mobile.js',        'js/pages/mobile.js'],
   ['build/mobile.html',      'mobile.html'],
   ['tools/check-p4-html.js', 'tools/check-p4-html.js'],
+  ['core/fringe.js',        'js/core/fringe.js'],
+  ['pages/pc-fringe.js',     'js/pages/pc-fringe.js'],
+  ['tools/check-fringe.js',  'tools/check-fringe.js'],
+  ['tools/check-html-structure.js', 'tools/check-html-structure.js'],
   // 工具（缺一个就等于少一道防线）
   ['tools/check-ids.js',     'tools/check-ids.js'],
   ['tools/check-p1-html.js', 'tools/check-p1-html.js'],

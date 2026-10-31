@@ -70,6 +70,23 @@ if (fs.existsSync(optPath)) {
   check('存在 optical.html', false);
 }
 
+// P5 接线（图像分析 + 导入手机记录）
+const idxPath = path.join(REPO, 'index.html');
+if (fs.existsSync(idxPath)) {
+  const idx = fs.readFileSync(idxPath, 'utf8');
+  check('首页加载 core/fringe.js', /core\/fringe\.js/.test(idx));
+  const iPlot = idx.indexOf('core/plot.js'), iFringe = idx.indexOf('core/fringe.js');
+  check('core/fringe.js 在 plot.js 之后', iFringe > iPlot && iPlot >= 0, 'plot@' + iPlot + ' fringe@' + iFringe);
+  const iPc = idx.indexOf('pages/pc.js'), iPcF = idx.indexOf('pages/pc-fringe.js');
+  check('pages/pc-fringe.js 在 pc.js 之后', iPcF > iPc && iPc >= 0, 'pc@' + iPc + ' pc-fringe@' + iPcF);
+  check('首页有「内含自检」与「导入手机记录」按钮',
+        /onclick="fringeSelfTest\(\)"/.test(idx) && /onclick="importPhoneRecord\(\)"/.test(idx));
+  check('P5 容器齐全（fringeSelfTestResult / phoneRecordFile / phoneRecordResult）',
+        ['fringeSelfTestResult', 'phoneRecordFile', 'phoneRecordResult']
+          .every(id => new RegExp('\\sid="' + id + '"').test(idx)));
+} else {
+  check('存在 index.html', false);
+}
 console.log('\n仓库根: ' + REPO);
 console.log((bad === 0 ? '页面接线检查通过' : bad + ' 项不通过') + '（' + ok + ' pass / ' + bad + ' fail）');
 process.exit(bad === 0 ? 0 : 1);

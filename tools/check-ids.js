@@ -4,22 +4,37 @@
  * cameraInfo / compareResult / pathInputs / unc_pixel_k / wl 五个不存在的元素，
  * 一执行就 TypeError，而 node --check 完全看不出来（语法是对的）。
  *
- * 用法：node plat_review/tools/check-ids.js       （单侧/双侧布局都能跑，缺文件只告警）
+ * 用法：node tools/check-ids.js            （<仓库>/tools/ 或 <仓库>/plat_review/tools/ 都可以）
+ *       node tools/check-ids.js <index.html> <js 根目录>   （本机自验时指定路径）
  */
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.resolve(__dirname, '../..');          // 仓库根（plat_review/tools → ../..）
-const ALT = path.resolve(__dirname, '..');              // 设计侧布局（plat_review/）
-// 任何相对路径在这些目录下找：仓库根、设计侧、审查快照、本地基线树
-const BASES = [ROOT, ALT, path.join(ALT, 'site'), path.join(ROOT, 'fresnel-platform'),
-               path.join(ROOT, 'fresnel-platform', 'js'), path.join(ROOT, 'js')];
+// 向上查找仓库根：以 plat_review/MANIFEST.sha256 为标志（放在 tools/ 或 plat_review/tools/ 都能定位）
+function findRepo(start) {
+  let d = path.resolve(start);
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(d, 'plat_review', 'MANIFEST.sha256'))) return d;
+    const up = path.dirname(d);
+    if (up === d) break;
+    d = up;
+  }
+  return null;
+}
+
+const REPO = findRepo(__dirname) || path.resolve(__dirname, '..');   // 找不到就退回"上两级结构"
+const ROOT = REPO;
+const ALT = path.resolve(__dirname, '..');
+
+// 顺序要紧：仓库根的 js/ 优先（部署文件优先于设计副本），其余是兜底布局
+const BASES = [path.join(ROOT, 'js'), ROOT, ALT, path.join(ALT, 'site'),
+               path.join(ROOT, 'fresnel-platform'), path.join(ROOT, 'fresnel-platform', 'js')];
 
 // 页面 → 参与检查的 JS（core 里只有真正查 DOM 的文件才算）
 const MAP = [
-  { html: 'index.html',  js: ['js/pages/pc.js', 'js/core/ui.js'] },
-  { html: 'mobile.html', js: ['js/pages/mobile.js', 'core/ui.js'] },
-  { html: 'optical.html', js: ['js/pages/optical.js'] }
+  { html: 'index.html',  js: ['pages/pc.js', 'core/ui.js'] },
+  { html: 'mobile.html', js: ['pages/mobile.js', 'core/ui.js'] },
+  { html: 'optical.html', js: ['pages/optical.js'] }
 ];
 
 // 动态创建 / 可选容器，允许不存在（缺了只是功能降级，不是错误）
@@ -52,24 +67,51 @@ function idsInJs(file) {
 }
 
 let problems = 0, checkedFiles = 0;
-for (const row of MAP) {
-  const htmlFile = find(row.html);
-  if (!htmlFile) { console.log('SKIP  ' + row.html + '（未找到，可能还没生成）'); continue; }
+
+// 报告里始终打印"实际检查的是哪个文件"，避免"检查了设计副本却当成部署文件"的假通过
+function report(htmlFile, jsRel, jsFile, have) {
+  checkedFiles++;
+  const want = idsInJs(jsFile);
+  const missing = [...want].filter(id => !have.has(id) && !ALLOW.has(id));
+  const rel = path.relative(REPO, jsFile) || jsFile;
+  if (missing.length) {
+    problems++;
+    console.log('FAIL  ' + path.basename(htmlFile) + ' ← ' + rel + '  缺少 id: ' + missing.join(', '));
+  } else {
+    console.log('PASS  ' + path.basename(htmlFile) + ' ← ' + rel +
+                '（引用 ' + want.size + ' 个 id，全部存在）');
+  }
+}
+
+const argv = process.argv.slice(2);
+if (argv[0]) {
+  // 指定模式：node check-ids.js <html> [js 根目录]
+  const htmlFile = path.resolve(argv[0]);
+  const jsRoot = path.resolve(argv[1] || path.dirname(htmlFile));
+  if (!fs.existsSync(htmlFile)) { console.log('FAIL  ' + htmlFile + ' 不存在'); process.exit(1); }
   const have = idsInHtml(htmlFile);
-  for (const jsRel of row.js) {
-    const jsFile = find(jsRel);
-    if (!jsFile) { console.log('SKIP  ' + jsRel + '（未找到）'); continue; }
-    checkedFiles++;
-    const want = idsInJs(jsFile);
-    const missing = [...want].filter(id => !have.has(id) && !ALLOW.has(id));
-    if (missing.length) {
-      problems++;
-      console.log('FAIL  ' + row.html + ' ← ' + jsRel + ' 缺少 id: ' + missing.join(', '));
-    } else {
-      console.log('PASS  ' + row.html + ' ← ' + jsRel + '（引用 ' + want.size + ' 个 id，全部存在）');
+  const walk = (dir, depth) => {
+    if (depth > 3) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p, depth + 1);
+      else if (/\.js$/.test(e.name) && !/[\\/]physics/.test(p)) report(htmlFile, p, p, have);
+    }
+  };
+  walk(jsRoot, 0);
+} else {
+  for (const row of MAP) {
+    const htmlFile = find(row.html);
+    if (!htmlFile) { console.log('SKIP  ' + row.html + '（未找到，可能还没生成）'); continue; }
+    const have = idsInHtml(htmlFile);
+    for (const jsRel of row.js) {
+      const jsFile = find(jsRel);
+      if (!jsFile) { console.log('SKIP  ' + jsRel + '（未找到）'); continue; }
+      report(htmlFile, jsRel, jsFile, have);
     }
   }
 }
 
 console.log('\n检查 ' + checkedFiles + ' 个 JS 文件，' + problems + ' 处缺 id');
+if (checkedFiles === 0) { console.log('FAIL  一个文件都没检查到 —— 这不是通过'); process.exit(1); }
 process.exit(problems ? 1 : 0);
