@@ -74,6 +74,8 @@ const PAIRS = [
   ['tools/stamp-version.js',  'tools/stamp-version.js'],
   ['tools/check-versions.js', 'tools/check-versions.js'],
   ['pages/optical-dpr.js',   'js/pages/optical-dpr.js'],
+  ['pages/optical-rail.js',   'js/pages/optical-rail.js'],
+  ['tools/check-optical-geometry.js', 'tools/check-optical-geometry.js'],
   // 工具（缺一个就等于少一道防线）
   ['tools/check-ids.js',     'tools/check-ids.js'],
   ['tools/check-p1-html.js', 'tools/check-p1-html.js'],

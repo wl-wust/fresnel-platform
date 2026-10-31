@@ -50,8 +50,8 @@ for (const m of fs.readFileSync(BASE, 'utf8').matchAll(/^\s*(?:let|const)\s+([^;
 }
 
 // 检查我们自己的页面模块
-const MODULES = ['js/pages/optical-fix.js', 'js/pages/optical-interact.js', 'js/pages/optical-dpr.js',
-                 'plat_review/pages/optical-fix.js', 'plat_review/pages/optical-interact.js', 'plat_review/pages/optical-dpr.js'];
+const MODULES = ['js/pages/optical-fix.js', 'js/pages/optical-interact.js', 'js/pages/optical-dpr.js', 'js/pages/optical-rail.js',
+                 'plat_review/pages/optical-fix.js', 'plat_review/pages/optical-interact.js', 'plat_review/pages/optical-dpr.js', 'plat_review/pages/optical-rail.js'];
 
 let bad = 0, files = 0;
 for (const rel of MODULES) {

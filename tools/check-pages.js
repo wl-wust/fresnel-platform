@@ -107,6 +107,15 @@ if (fs.existsSync(optP)) {
   check('光学页加载 DPR 模块且在 Pointer 层之后', iDpr > iInt && iInt >= 0,
         'interact@' + iInt + ' dpr@' + iDpr);
 }
+// P7 接线：空间模型（位置即真实距离）+ 透镜二次成像
+if (fs.existsSync(optP)) {
+  const o = fs.readFileSync(optP, 'utf8');
+  const iDpr2 = o.indexOf('optical-dpr.js'), iRail = o.indexOf('optical-rail.js');
+  check('光学页加载空间模型且在 DPR 之后', iRail > iDpr2 && iDpr2 >= 0, 'dpr@' + iDpr2 + ' rail@' + iRail);
+  check('光学页有透镜焦距 f′ 输入', /\sid="lens_f"/.test(o));
+  check('光学页有放大率/说明行 #result_M', /\sid="result_M"/.test(o));
+  check('条纹标签已改为屏面口径', /屏上条纹间距/.test(o) && /屏面视场条纹数/.test(o));
+}
 console.log('\n仓库根: ' + REPO);
 console.log((bad === 0 ? '页面接线检查通过' : bad + ' 项不通过') + '（' + ok + ' pass / ' + bad + ' fail）');
 process.exit(bad === 0 ? 0 : 1);

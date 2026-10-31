@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>菲涅耳双棱镜干涉 · 光学模拟实验室</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2316213e'/%3E%3Cpath d='M6 22 L16 8 L26 22 Z' fill='none' stroke='%2364b5f6' stroke-width='2'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/optical_v2.css?v=ab01aab">
-<link rel="stylesheet" href="css/optical-responsive.css?v=ab01aab">
+<link rel="stylesheet" href="css/optical_v2.css?v=d957547">
+<link rel="stylesheet" href="css/optical-responsive.css?v=d957547">
 </head>
 <body>
   <div class="header">
@@ -71,7 +71,7 @@
       </div>
 
       <div class="canvas-footer">
-        <span>拖拽元件仅调整示意图位置（不按比例）　·　实验参数以右侧面板为准</span>
+        <span>拖拽元件即改变真实距离（台面 0–1200 mm，按 1 px ≈ 1.5 mm 换算）　·　面板与位置双向同步</span>
       </div>
     </div>
 
@@ -91,6 +91,7 @@
         <div class="param-row"><span class="param-label">狭缝宽度 b</span><div><input type="number" class="param-input" id="b" value="0.08" step="0.01" onchange="updateParams()"><span class="param-unit">mm</span></div></div>
         <div class="param-row"><span class="param-label">物距 z₁</span><div><input type="number" class="param-input" id="z1" value="50" step="1" onchange="updateParams()"><span class="param-unit">mm</span></div></div>
         <div class="param-row"><span class="param-label">像距 z₂</span><div><input type="number" class="param-input" id="z2" value="950" step="10" onchange="updateParams()"><span class="param-unit">mm</span></div></div>
+        <div class="param-row"><span class="param-label">透镜焦距 f′</span><div><input type="number" class="param-input" id="lens_f" value="150" step="1" onchange="updateParams()"><span class="param-unit">mm</span></div></div>
       </div>
 
       <div class="param-group">
@@ -99,6 +100,7 @@
           <div class="result-row"><span>虚光源间距 d</span><span class="result-value" id="result_d">-</span></div>
           <div class="result-row"><span>条纹间距 Δx</span><span class="result-value" id="result_dx">-</span></div>
           <div class="result-row"><span>总距离 D</span><span class="result-value" id="result_D">-</span></div>
+          <div class="result-row"><span>放大率 / 说明</span><span class="result-value" id="result_M">-</span></div>
         </div>
         <p class="hint" style="font-size:11px;color:#888;margin-top:8px">
           d = 2·z₁·(n−1)·β 为<b>傍轴近似</b>值；与 MATLAB 严格追迹的 0.90213 mm 相差 0.02%。
@@ -109,21 +111,22 @@
         <h3>干涉条纹</h3>
         <canvas id="fringeCanvas" width="260" height="150" style="width:100%; border-radius:8px; background:#000;"></canvas>
         <div class="result-box" style="margin-top:10px;">
-          <div class="result-row"><span>理论条纹间距</span><span class="result-value" id="theoretical_dx">-</span></div>
-          <div class="result-row"><span>边缘条纹可见度 V(±7Δx)</span><span class="result-value" id="visibility">-</span></div>
+          <div class="result-row"><span>屏上条纹间距</span><span class="result-value" id="theoretical_dx">-</span></div>
+          <div class="result-row"><span>屏面视场条纹数（±3 mm）</span><span class="result-value" id="visibility">-</span></div>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="js/physics.js?v=ab01aab"></script>
-  <script src="js/core/fmt.js?v=ab01aab"></script>
-  <script src="js/core/ui.js?v=ab01aab"></script>
-  <script src="js/core/store.js?v=ab01aab"></script>
-  <script src="js/core/plot.js?v=ab01aab"></script>
-  <script src="js/optical_simulator.js?v=ab01aab"></script>
-  <script src="js/pages/optical-fix.js?v=ab01aab"></script>
-<script src="js/pages/optical-interact.js?v=ab01aab"></script>
-<script src="js/pages/optical-dpr.js?v=ab01aab"></script>
+  <script src="js/physics.js?v=d957547"></script>
+  <script src="js/core/fmt.js?v=d957547"></script>
+  <script src="js/core/ui.js?v=d957547"></script>
+  <script src="js/core/store.js?v=d957547"></script>
+  <script src="js/core/plot.js?v=d957547"></script>
+  <script src="js/optical_simulator.js?v=d957547"></script>
+  <script src="js/pages/optical-fix.js?v=d957547"></script>
+<script src="js/pages/optical-interact.js?v=d957547"></script>
+<script src="js/pages/optical-dpr.js?v=d957547"></script>
+<script src="js/pages/optical-rail.js?v=d957547"></script>
 </body>
 </html>
