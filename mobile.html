@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>双棱镜干涉实验 · 手机端</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2316213e'/%3E%3Cpath d='M6 22 L16 8 L26 22 Z' fill='none' stroke='%2364b5f6' stroke-width='2'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/mobile.css?v=0c5969d">
-<link rel="stylesheet" href="css/app-responsive.css?v=0c5969d">
+<link rel="stylesheet" href="css/mobile.css?v=ab01aab">
+<link rel="stylesheet" href="css/app-responsive.css?v=ab01aab">
 </head>
 <body>
 <div class="app-container">
@@ -18,11 +18,11 @@
     <a href="optical.html" class="btn-optical-mobile">🔭 光学模拟</a>
   </header>
 
-  <nav class="tab-nav">
-    <button class="tab-btn active" data-tab="capture">拍照</button>
-    <button class="tab-btn" data-tab="calibrate">标定</button>
-    <button class="tab-btn" data-tab="analysis">分析</button>
-    <button class="tab-btn" data-tab="guide">指南</button>
+  <nav class="tab-nav" role="tablist" aria-label="功能页签">
+    <button class="tab-btn active" data-tab="capture" role="tab" aria-selected="true">拍照</button>
+    <button class="tab-btn" data-tab="calibrate" role="tab" aria-selected="false">标定</button>
+    <button class="tab-btn" data-tab="analysis" role="tab" aria-selected="false">分析</button>
+    <button class="tab-btn" data-tab="guide" role="tab" aria-selected="false">指南</button>
   </nav>
 
   <!-- ================= 拍照 ================= -->
@@ -186,10 +186,10 @@
 
 <div id="bpLoading" class="loading" style="display:none"><div class="spinner"></div><p>处理中...</p></div>
 
-<script src="js/physics.js?v=0c5969d"></script>
-<script src="js/core/fmt.js?v=0c5969d"></script>
-<script src="js/core/ui.js?v=0c5969d"></script>
-<script src="js/core/store.js?v=0c5969d"></script>
-<script src="js/pages/mobile.js?v=0c5969d"></script>
+<script src="js/physics.js?v=ab01aab"></script>
+<script src="js/core/fmt.js?v=ab01aab"></script>
+<script src="js/core/ui.js?v=ab01aab"></script>
+<script src="js/core/store.js?v=ab01aab"></script>
+<script src="js/pages/mobile.js?v=ab01aab"></script>
 </body>
 </html>

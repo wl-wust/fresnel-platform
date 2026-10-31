@@ -87,6 +87,26 @@ if (fs.existsSync(idxPath)) {
 } else {
   check('存在 index.html', false);
 }
+// P6b 接线：页签 ARIA 状态 + 光学页 DPR 模块
+for (const [page, btnClass] of [['index.html', 'tab'], ['mobile.html', 'tab-btn']]) {
+  const fp = path.join(REPO, page);
+  if (!fs.existsSync(fp)) continue;
+  const h = fs.readFileSync(fp, 'utf8');
+  check(page + ' 的页签有 role="tablist"', /role="tablist"/.test(h));
+  const tabs = [...h.matchAll(new RegExp('data-tab="[^"]+"', 'g'))].length;
+  const withRole = [...h.matchAll(/data-tab="[^"]+"[^>]*role="tab"/g)].length +
+                   [...h.matchAll(/role="tab"[^>]*data-tab="[^"]+"/g)].length;
+  check(page + ' 的 ' + tabs + ' 个页签都带 role="tab" 与 aria-selected',
+        tabs > 0 && withRole >= tabs && (h.match(/aria-selected=/g) || []).length >= tabs,
+        'role=' + withRole + '/' + tabs + ' aria=' + (h.match(/aria-selected=/g) || []).length);
+}
+const optP = path.join(REPO, 'optical.html');
+if (fs.existsSync(optP)) {
+  const o = fs.readFileSync(optP, 'utf8');
+  const iInt = o.indexOf('optical-interact.js'), iDpr = o.indexOf('optical-dpr.js');
+  check('光学页加载 DPR 模块且在 Pointer 层之后', iDpr > iInt && iInt >= 0,
+        'interact@' + iInt + ' dpr@' + iDpr);
+}
 console.log('\n仓库根: ' + REPO);
 console.log((bad === 0 ? '页面接线检查通过' : bad + ' 项不通过') + '（' + ok + ' pass / ' + bad + ' fail）');
 process.exit(bad === 0 ? 0 : 1);

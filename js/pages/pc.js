@@ -49,6 +49,9 @@
     BP.ui.$$('.tab').forEach(function (t) { t.classList.remove('active'); });
     BP.ui.$$('.tab-content').forEach(function (t) { t.classList.remove('active'); });
     if (btn) btn.classList.add('active');
+    // 读屏器靠 aria-selected 判断当前页签，必须与视觉 active 同步
+    BP.ui.$('.tab').forEach(function (t) { t.setAttribute('aria-selected', t === btn ? 'true' : 'false'); });
+
     var panel = $(name);
     if (panel) panel.classList.add('active');
   }
