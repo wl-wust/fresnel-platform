@@ -1,0 +1,10 @@
+{
+  "schema": "bp.params/1",
+  "source": "研究报告 表 5.1",
+  "optics":   { "lambdaNa": 589.3, "lambdaRef": 650, "nNa": 1.5168, "nRef": 1.5145, "A": 1.0, "b": 0.08 },
+  "geometry": { "a": 50, "D": 1000, "h": 10, "t": 0.175 },
+  "camera":   { "k": 0.0040, "calL": 5, "calN": 1250 },
+  "derived":  { "dTrace": 0.90213, "dParaxial": 0.90199, "deltaXmm": 0.6533, "deltaXPx": 163.3,
+                "waistUm": 0.68 },
+  "note": "derived 只作显示对照，不参与计算；计算一律由 physics.js 现算"
+}

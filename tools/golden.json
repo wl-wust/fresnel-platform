@@ -1,0 +1,50 @@
+{
+  "schema": "bp.golden/1",
+  "source": "《菲涅耳双棱镜干涉实验装置改进与计算方法优化》研究报告 表5.1 / 表5.2 / 表6.1 / 表8.1",
+  "params": {
+    "A_deg": 1.0, "nNa": 1.5168, "nRef": 1.5145, "a_mm": 50, "D_mm": 1000,
+    "b_mm": 0.08, "k_mmPerPx": 0.0040, "lamNa_nm": 589.3, "lamRef_nm": 650,
+    "h_mm": 10, "t_mm": 0.175
+  },
+  "table51": {
+    "d_trace_mm": 0.90213, "d_paraxial_mm": 0.90199,
+    "deltaX_mm": 0.6533, "deltaX_px": 163.3,
+    "waist_um": 0.68
+  },
+  "table52": {
+    "ratio":  { "value_nm": 589.33, "relU": 0.0010, "bias":  0.00004 },
+    "mag":    { "value_nm": 589.28, "relU": 0.0014, "bias": -0.00003 },
+    "trace":  { "value_nm": 589.30, "relU": 0.0013, "bias": -0.00001 },
+    "combine":{ "value_nm": 589.31, "relU": 0.0007, "bias":  0.00001,
+                "u_nm": 0.42, "chi2": 0.0025, "dof": 2, "chi2Crit": 5.991, "consistent": true },
+    "combineInputs": [
+      { "name": "比值法",       "value_nm": 589.33, "u_nm": 0.61 },
+      { "name": "横向放大率法", "value_nm": 589.28, "u_nm": 0.84 },
+      { "name": "光线追迹法",   "value_nm": 589.30, "u_nm": 0.78 }
+    ],
+    "commonRelU": 6.4e-6
+  },
+  "table61": {
+    "fft":   { "deltaX_mm": 0.6559, "sd_mm": 5.87e-6, "relSd": 9e-6 },
+    "phase": { "deltaX_mm": 0.6538, "sd_mm": 4.17e-6, "relSd": 6e-6 },
+    "zero":  { "deltaX_mm": 0.6532, "sd_mm": 1.38e-4, "relSd": 2.11e-4 }
+  },
+  "table81": [
+    { "key": "dx",       "label": "u(Δx)/Δx",       "source": "条纹提取（30 帧统计）",      "relU": 0.0000006 },
+    { "key": "a",        "label": "u(a)/a",         "source": "单缝—棱脊距离（导轨）",      "relU": 0.00100 },
+    { "key": "A",        "label": "u(A)/A",         "source": "折射棱角（自准直）",         "relU": 0.00030 },
+    { "key": "nMinus1",  "label": "u(n)/(n−1)",     "source": "折射率（最小偏向角，单支）", "relU": 0.00059 },
+    { "key": "D",        "label": "u(D)/D",         "source": "观察距离（导轨）",           "relU": 0.00050 },
+    { "key": "beta",     "label": "u(β)/β",         "source": "放大率（二次成像）",         "relU": 0.00120 },
+    { "key": "dPrime",   "label": "u(d′)/d′",       "source": "像间距（像斑质心）",         "relU": 0.00050 },
+    { "key": "lamRef",   "label": "u(λ_ref)/λ_ref", "source": "激光波长标定",               "relU": 0.00050 }
+  ],
+  "fold": {
+    "note": "表8.1 八分量按路径折叠，用于对照表5.2；本环境已用 Node 复算确认",
+    "uD_over_D": 0.0011992,
+    "basic": 0.0012993,
+    "trace": 0.0012993,
+    "ratio": 0.0009728,
+    "mag":   0.0013929
+  }
+}
