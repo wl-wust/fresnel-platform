@@ -1,316 +1,209 @@
 <!DOCTYPE html>
-
 <html lang="zh-CN">
-
 <head>
-
-    <meta charset="UTF-8">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>菲涅耳双棱镜干涉实验 AI 数字化平台</title>
-
-    <link rel="stylesheet" href="css/style.css?v=3.0">
-
-
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>菲涅耳双棱镜干涉实验 AI 数字化平台</title>
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
-
 <body>
-
-    <div class="container">
-
-        <header>
-
-            <button class="btn-switch-mobile" onclick="switchToMobile()">切换到手机端</button>
-
-            <h1>菲涅耳双棱镜干涉实验 AI 数字化平台</h1>
-
-            <p>条纹识别 · 数据拟合 · 不确定度评定 · 多路径合成</p>
-
-        <a href="optical_v2.html" class="btn-optical">🔭 光学模拟</a></header>
-
-        <nav class="tabs">
-
-            <button class="tab active" data-tab="analysis">图像分析</button>
-
-            <button class="tab" data-tab="wavelength">波长计算</button>
-
-            <button class="tab" data-tab="fit">数据拟合</button>
-
-            <button class="tab" data-tab="uncertainty">不确定度</button>
-
-            <button class="tab" data-tab="combine">多路径合成</button>
-
-            <button class="tab" data-tab="history">历史记录</button>
-
-        </nav>
-
-
-
-        <div id="analysis" class="tab-content active">
-
-            <h2>条纹图像分析</h2>
-
-            <div class="analysis-layout">
-
-                <div class="upload-area">
-
-                    <input type="file" id="imageInput" accept="image/*">
-
-                    <button onclick="analyzeImage()">开始分析</button>
-
-                    <p class="hint">支持 JPG/PNG，建议条纹周期≥8像素</p>
-
-                </div>
-
-                <div class="result-panel" id="analysisResult"></div>
-
-            </div>
-
-            <div class="chart-container" id="fringeChartContainer" style="display:none">
-
-                <canvas id="fringeChart"></canvas>
-
-            </div>
-
-        </div>
-
-
-
-        <div id="wavelength" class="tab-content">
-
-            <h2>波长计算</h2>
-
-            <div class="calc-grid">
-
-                <div class="calc-card">
-
-                    <h3>基本公式法</h3>
-
-                    <div class="form-group"><label>d (mm) 虚光源间距</label><input type="number" id="d_value" step="0.01" value="0.90213"></div>
-
-                    <div class="form-group"><label>D (mm) 观察距离</label><input type="number" id="D_value" step="1" value="1000"></div>
-
-                    <div class="form-group"><label>k (mm/px) 像素当量</label><input type="number" id="pixel_size" step="0.0001" value="0.004"></div>
-
-                    <div class="form-group"><label>Δx (px) 条纹间距</label><input type="number" id="fringe_period_px" step="0.1" value="163.3"></div>
-
-                    <button onclick="calcWavelength()">计算波长</button>
-                    <button onclick="fillReportParams()">填入报告参数（表 5.1）</button>
-
-                    <div id="wavelengthResult" class="result-box"></div>
-
-                </div>
-
-                <div class="calc-card">
-
-                    <h3>比值法</h3>
-
-                    <div class="form-group"><label>激光条纹间距 (px)</label><input type="number" id="fringe_laser" step="0.1" value="12.5"></div>
-
-                    <div class="form-group"><label>钠光条纹间距 (px)</label><input type="number" id="fringe_sodium" step="0.1" value="11.3"></div>
-
-                    <div class="form-group"><label>激光波长 (nm)</label><input type="number" id="lambda_laser" step="1" value="650"></div>
-
-                    <div class="form-group"><label>n_Na 折射率（589.3 nm）</label><input type="number" id="n_na" step="0.0001" value="1.5168"></div>
-                    <div class="form-group"><label>n_ref 折射率（650 nm）</label><input type="number" id="n_ref" step="0.0001" value="1.5145"></div>
-                    <button onclick="calcRatioMethod()">比值法计算</button>
-
-                    <div id="ratioResult" class="result-box"></div>
-
-                </div>
-
-                <div class="calc-card">
-
-                    <h3>增强不确定度</h3>
-
-                    <div class="form-group"><label>d (mm)</label><input type="number" id="unc_d_pc" step="0.01" value="0.5"></div>
-
-                    <div class="form-group"><label>u(d) (mm)</label><input type="number" id="unc_u_d_pc" step="0.001" placeholder="默认0.2%"></div>
-
-                    <div class="form-group"><label>D (mm)</label><input type="number" id="unc_D_pc" step="1" value="500"></div>
-
-                    <div class="form-group"><label>u(D) (mm)</label><input type="number" id="unc_u_D_pc" step="0.1" placeholder="默认0.3%"></div>
-
-                    <div class="form-group"><label>条纹间距 (px)</label><input type="number" id="unc_fringe_pc" step="0.1"></div>
-
-                    <button onclick="calcUncertaintyPC()">计算不确定度</button>
-
-                    <div id="enhancedUncResultPC" class="result-box"></div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-
-        <div id="fit" class="tab-content">
-
-            <h2>最小二乘拟合</h2>
-
-            <div class="fit-layout">
-
-                <div class="table-container">
-
-                    <table id="fitTable">
-
-                        <thead><tr><th>x</th><th>y</th><th>操作</th></tr></thead>
-
-                        <tbody>
-
-                            <tr><td><input type="number" step="any" class="fit-x"></td><td><input type="number" step="any" class="fit-y"></td><td><button onclick="removeFitRow(this)">删除</button></td></tr>
-
-                            <tr><td><input type="number" step="any" class="fit-x"></td><td><input type="number" step="any" class="fit-y"></td><td><button onclick="removeFitRow(this)">删除</button></td></tr>
-
-                            <tr><td><input type="number" step="any" class="fit-x"></td><td><input type="number" step="any" class="fit-y"></td><td><button onclick="removeFitRow(this)">删除</button></td></tr>
-
-                        </tbody>
-
-                    </table>
-
-                    <button onclick="addFitRow()">+ 添加数据点</button>
-
-                    <button onclick="performFitTable()">执行拟合</button>
-
-                </div>
-
-                <div id="fitResult" class="result-box"></div>
-                <div id="fitResiduals" class="result-box"></div>
-
-            </div>
-
-            <div class="chart-container" id="fitChartContainer" style="display:none">
-
-                <canvas id="fitChart"></canvas>
-
-            </div>
-
-        </div>
-
-
-
-        <div id="uncertainty" class="tab-content">
-
-            <h2>不确定度评定</h2>
-
-            <div class="unc-layout">
-
-                <div class="table-container">
-
-                    <table id="uncTable">
-
-                        <thead><tr><th>测量值 (nm)</th><th>操作</th></tr></thead>
-
-                        <tbody>
-
-                            <tr><td><input type="number" step="0.1" class="unc-value" placeholder="589.1"></td><td><button onclick="removeUncRow(this)">删除</button></td></tr>
-
-                            <tr><td><input type="number" step="0.1" class="unc-value" placeholder="589.3"></td><td><button onclick="removeUncRow(this)">删除</button></td></tr>
-
-                            <tr><td><input type="number" step="0.1" class="unc-value" placeholder="589.2"></td><td><button onclick="removeUncRow(this)">删除</button></td></tr>
-
-                        </tbody>
-
-                    </table>
-
-                    <button onclick="addUncRow()">+ 添加测量值</button>
-
-                    <button onclick="calcUncertaintyTable()">计算不确定度</button>
-
-                </div>
-
-                <div id="uncertaintyResult" class="result-box"></div>
-
-            </div>
-
-        </div>
-
-
-
-        <div id="combine" class="tab-content">
-
-            <h2>多路径加权合成</h2>
-
-            <div class="combine-layout">
-
-                <div class="table-container">
-
-                    <table id="pathTable">
-
-                        <thead><tr><th>路径名称</th><th>测量值 (nm)</th><th>不确定度</th><th>操作</th></tr></thead>
-
-                        <tbody>
-
-                            <tr><td><input type="text" class="path-name" placeholder="基本公式"></td><td><input type="number" step="0.1" class="path-value" placeholder="589.1"></td><td><input type="number" step="0.01" class="path-unc" placeholder="1.5"></td><td><button onclick="removePathRow(this)">删除</button></td></tr>
-
-                            <tr><td><input type="text" class="path-name" placeholder="比值法"></td><td><input type="number" step="0.1" class="path-value" placeholder="589.3"></td><td><input type="number" step="0.01" class="path-unc" placeholder="1.2"></td><td><button onclick="removePathRow(this)">删除</button></td></tr>
-
-                            <tr><td><input type="text" class="path-name" placeholder="棱镜偏折角"></td><td><input type="number" step="0.1" class="path-value" placeholder="589.0"></td><td><input type="number" step="0.01" class="path-unc" placeholder="2.0"></td><td><button onclick="removePathRow(this)">删除</button></td></tr>
-
-                        </tbody>
-
-                    </table>
-
-                    <button onclick="addPathRow()">+ 添加路径</button>
-
-                    <label>标准值(589.3nm): <input type="number" id="standard_value" value="589.3" step="0.1"></label>
-
-                    <button onclick="fillReportPaths()">填入报告三路径（表 5.2）</button>
-                    <button onclick="comparePathsTable()">执行加权合成</button>
-
-                </div>
-
-                <div id="compareResult" class="result-box"></div>
-                <div id="compareTable" class="result-box"></div>
-
-            </div>
-
-            <div class="chart-container" id="combineChartContainer" style="display:none">
-
-                <canvas id="combineChart"></canvas>
-
-            </div>
-
-        </div>
-
-
-
-        <div id="history" class="tab-content">
-
-            <h2>历史记录</h2>
-
-            <div class="history-controls">
-
-                <button onclick="clearHistory()">清空记录</button>
-
-                <button onclick="exportHistory()">导出记录</button>
-
-            </div>
-
-            <div id="historyList" class="history-list"></div>
-
-        </div>
+<div class="container">
+
+  <header>
+    <button class="btn-switch-mobile" onclick="switchToMobile()">切换到手机端</button>
+    <h1>菲涅耳双棱镜干涉实验 AI 数字化平台</h1>
+    <p>条纹识别 · 数据拟合 · 不确定度评定 · 多路径合成</p>
+    <a href="optical.html" class="btn-optical">🔭 光学模拟</a>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="analysis">图像分析</button>
+    <button class="tab" data-tab="wavelength">波长计算</button>
+    <button class="tab" data-tab="fit">数据拟合</button>
+    <button class="tab" data-tab="uncertainty">不确定度</button>
+    <button class="tab" data-tab="combine">多路径合成</button>
+    <button class="tab" data-tab="history">历史记录</button>
+  </nav>
+
+  <!-- ================= 图像分析 ================= -->
+  <div id="analysis" class="tab-content active">
+    <h2>条纹图像分析</h2>
+    <div class="analysis-layout">
+      <div class="upload-area">
+        <input type="file" id="imageInput" accept="image/*">
+        <button onclick="analyzeImage()">开始分析</button>
+        <p class="hint">支持 JPG/PNG，建议条纹周期 ≥ 8 像素</p>
+      </div>
+      <div class="result-panel" id="analysisResult"></div>
+    </div>
+    <div class="chart-container" id="fringeChartContainer" style="display:none">
+      <canvas id="fringeChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ================= 波长计算 ================= -->
+  <div id="wavelength" class="tab-content">
+    <h2>波长计算</h2>
+    <div class="calc-grid">
+
+      <div class="calc-card">
+        <h3>基本公式法</h3>
+        <div class="form-group"><label for="d_value">d (mm) 虚光源间距</label><input type="number" id="d_value" step="0.00001" value="0.90213"></div>
+        <div class="form-group"><label for="D_value">D (mm) 观察距离</label><input type="number" id="D_value" step="1" value="1000"></div>
+        <div class="form-group"><label for="pixel_size">k (mm/px) 像素当量</label><input type="number" id="pixel_size" step="0.0001" value="0.004"></div>
+        <div class="form-group"><label for="fringe_period_px">Δx (px) 条纹间距</label><input type="number" id="fringe_period_px" step="0.1" value="163.3"></div>
+        <button onclick="calcWavelength()">计算波长</button>
+        <button onclick="fillReportParams()">填入报告参数（表 5.1）</button>
+        <div id="wavelengthResult" class="result-box"></div>
+      </div>
+
+      <div class="calc-card">
+        <h3>比值法（含色散修正）</h3>
+        <div class="form-group"><label for="fringe_laser">激光条纹间距 (px)</label><input type="number" id="fringe_laser" step="0.1" value="180.9"></div>
+        <div class="form-group"><label for="fringe_sodium">钠光条纹间距 (px)</label><input type="number" id="fringe_sodium" step="0.1" value="163.3"></div>
+        <div class="form-group"><label for="lambda_laser">激光波长 (nm)</label><input type="number" id="lambda_laser" step="1" value="650"></div>
+        <div class="form-group"><label for="n_na">n_Na 折射率（589.3 nm）</label><input type="number" id="n_na" step="0.0001" value="1.5168"></div>
+        <div class="form-group"><label for="n_ref">n_ref 折射率（650 nm）</label><input type="number" id="n_ref" step="0.0001" value="1.5145"></div>
+        <button onclick="calcRatioMethod()">比值法计算</button>
+        <div id="ratioResult" class="result-box"></div>
+      </div>
+
+      <div class="calc-card">
+        <h3>单路径不确定度</h3>
+        <div class="form-group"><label for="unc_d_pc">d (mm)</label><input type="number" id="unc_d_pc" step="0.00001" value="0.90213"></div>
+        <div class="form-group"><label for="unc_u_d_pc">u(d) (mm)</label><input type="number" id="unc_u_d_pc" step="0.00001" placeholder="默认 0"></div>
+        <div class="form-group"><label for="unc_D_pc">D (mm)</label><input type="number" id="unc_D_pc" step="1" value="1000"></div>
+        <div class="form-group"><label for="unc_u_D_pc">u(D) (mm)</label><input type="number" id="unc_u_D_pc" step="0.1" placeholder="默认 0"></div>
+        <div class="form-group"><label for="unc_fringe_pc">条纹间距 (px)</label><input type="number" id="unc_fringe_pc" step="0.1" value="163.3"></div>
+        <button onclick="calcUncertaintyPC()">计算不确定度</button>
+        <div id="enhancedUncResultPC" class="result-box"></div>
+      </div>
 
     </div>
+  </div>
 
-    <script src="js/physics.js?v=bea3d23"></script>
-    <script src="js/core/fmt.js?v=bea3d23"></script>
-    <script src="js/core/ui.js?v=bea3d23"></script>
-    <script src="js/core/store.js?v=bea3d23"></script>
-    <script src="js/core/fit.js?v=bea3d23"></script>
-    <script src="js/core/plot.js?v=bea3d23"></script>
-    <script src="js/core/api.js?v=bea3d23"></script>
-    <script src="js/pages/pc.js?v=bea3d23"></script>
+  <!-- ================= 数据拟合 ================= -->
+  <div id="fit" class="tab-content">
+    <h2>最小二乘拟合</h2>
+    <div class="fit-layout">
+      <div class="table-container">
+        <table id="fitTable">
+          <thead><tr><th>x</th><th>y</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><input type="number" step="any" class="fit-x"></td><td><input type="number" step="any" class="fit-y"></td><td><button onclick="removeFitRow(this)">删除</button></td></tr>
+            <tr><td><input type="number" step="any" class="fit-x"></td><td><input type="number" step="any" class="fit-y"></td><td><button onclick="removeFitRow(this)">删除</button></td></tr>
+            <tr><td><input type="number" step="any" class="fit-x"></td><td><input type="number" step="any" class="fit-y"></td><td><button onclick="removeFitRow(this)">删除</button></td></tr>
+          </tbody>
+        </table>
+        <button onclick="addFitRow()">+ 添加数据点</button>
+        <button onclick="performFitTable()">执行拟合</button>
+      </div>
+      <div id="fitResult" class="result-box"></div>
+    </div>
+    <div id="fitResiduals" class="result-box"></div>
+    <div class="chart-container" id="fitChartContainer" style="display:none">
+      <canvas id="fitChart"></canvas>
+    </div>
 
+    <h2>Δx–L₃ 斜率法</h2>
+    <p class="hint">Δx = (λ/d)·L₃，斜率即 λ/d（报告图 5.1、式 13/17）</p>
+    <div class="fit-layout">
+      <div class="table-container">
+        <table id="l3Table">
+          <thead><tr><th>L₃ (mm)</th><th>Δx (mm)</th><th>操作</th></tr></thead>
+          <tbody id="l3Body"></tbody>
+        </table>
+        <button onclick="addL3Row()">+ 添加一行</button>
+        <div class="form-group"><label for="l3_d">d (mm) 虚光源间距</label><input type="number" id="l3_d" step="0.00001" value="0.90213"></div>
+        <button onclick="calcL3()">按斜率法解 λ</button>
+      </div>
+      <div id="l3Result" class="result-box"></div>
+    </div>
+    <div class="chart-container" id="l3ChartContainer" style="display:none">
+      <canvas id="l3Chart"></canvas>
+    </div>
+  </div>
+
+  <!-- ================= 不确定度 ================= -->
+  <div id="uncertainty" class="tab-content">
+    <h2>表 8.1 八分量 → 三条路径折叠</h2>
+    <div class="unc-layout">
+      <div class="table-container">
+        <table id="u81Table">
+          <thead><tr><th>分量</th><th>来源</th><th>相对标准不确定度 (%)</th></tr></thead>
+          <tbody id="u81Body"></tbody>
+        </table>
+        <button onclick="fill81Defaults()">填入表 8.1 默认值</button>
+        <button onclick="calc81()">折叠三条路径</button>
+      </div>
+      <div id="u81Result" class="result-box"></div>
+    </div>
+    <div id="u81Fold" class="result-box"></div>
+
+    <h2>A 类（重复测量）</h2>
+    <div class="unc-layout">
+      <div class="table-container">
+        <table id="uncTable">
+          <thead><tr><th>测量值 (nm)</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><input type="number" step="0.1" class="unc-value" placeholder="589.1"></td><td><button onclick="removeUncRow(this)">删除</button></td></tr>
+            <tr><td><input type="number" step="0.1" class="unc-value" placeholder="589.3"></td><td><button onclick="removeUncRow(this)">删除</button></td></tr>
+            <tr><td><input type="number" step="0.1" class="unc-value" placeholder="589.2"></td><td><button onclick="removeUncRow(this)">删除</button></td></tr>
+          </tbody>
+        </table>
+        <button onclick="addUncRow()">+ 添加测量值</button>
+        <button onclick="calcUncertaintyTable()">计算 A 类不确定度</button>
+      </div>
+      <div id="uncertaintyResult" class="result-box"></div>
+    </div>
+  </div>
+
+  <!-- ================= 多路径合成 ================= -->
+  <div id="combine" class="tab-content">
+    <h2>多路径加权合成</h2>
+    <div class="combine-layout">
+      <div class="table-container">
+        <table id="pathTable">
+          <thead><tr><th>路径名称</th><th>测量值 (nm)</th><th>不确定度 (nm)</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><input type="text" class="path-name" placeholder="基本公式"></td><td><input type="number" step="0.01" class="path-value" placeholder="589.1"></td><td><input type="number" step="0.01" class="path-unc" placeholder="1.5"></td><td><button onclick="removePathRow(this)">删除</button></td></tr>
+            <tr><td><input type="text" class="path-name" placeholder="比值法"></td><td><input type="number" step="0.01" class="path-value" placeholder="589.3"></td><td><input type="number" step="0.01" class="path-unc" placeholder="1.2"></td><td><button onclick="removePathRow(this)">删除</button></td></tr>
+            <tr><td><input type="text" class="path-name" placeholder="追迹法"></td><td><input type="number" step="0.01" class="path-value" placeholder="589.0"></td><td><input type="number" step="0.01" class="path-unc" placeholder="2.0"></td><td><button onclick="removePathRow(this)">删除</button></td></tr>
+          </tbody>
+        </table>
+        <button onclick="addPathRow()">+ 添加路径</button>
+        <button onclick="fillReportPaths()">填入报告三路径（表 5.2）</button>
+        <div class="form-group"><label for="standard_value">标准值 (nm)</label><input type="number" id="standard_value" value="589.3" step="0.1"></div>
+        <button onclick="comparePathsTable()">执行加权合成</button>
+      </div>
+      <div id="compareResult" class="result-box"></div>
+    </div>
+    <div id="compareTable" class="result-box"></div>
+    <div class="chart-container" id="combineChartContainer" style="display:none">
+      <canvas id="combineChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ================= 历史记录 ================= -->
+  <div id="history" class="tab-content">
+    <h2>历史记录</h2>
+    <div class="history-controls">
+      <button onclick="clearHistory()">清空记录</button>
+      <button onclick="exportHistory()">导出记录</button>
+    </div>
+    <div id="historyList" class="history-list"></div>
+  </div>
+
+</div>
+
+<script src="js/physics.js?v=4"></script>
+<script src="js/core/fmt.js?v=4"></script>
+<script src="js/core/ui.js?v=4"></script>
+<script src="js/core/store.js?v=4"></script>
+<script src="js/core/fit.js?v=4"></script>
+<script src="js/core/plot.js?v=4"></script>
+<script src="js/core/api.js?v=4"></script>
+<script src="js/pages/pc.js?v=4"></script>
+<script src="js/pages/pc-unc.js?v=4"></script>
 </body>
-
 </html>
-
-
-
-
-
-
-
