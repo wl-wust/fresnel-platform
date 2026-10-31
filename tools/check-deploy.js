@@ -67,6 +67,12 @@ const PAIRS = [
   ['pages/pc-fringe.js',     'js/pages/pc-fringe.js'],
   ['tools/check-fringe.js',  'tools/check-fringe.js'],
   ['tools/check-html-structure.js', 'tools/check-html-structure.js'],
+  ['build/404.html',          '404.html'],
+  ['build/README.md',         'README.md'],
+  ['build/.nojekyll',         '.nojekyll'],
+  ['build/app-responsive.css','css/app-responsive.css'],
+  ['tools/stamp-version.js',  'tools/stamp-version.js'],
+  ['tools/check-versions.js', 'tools/check-versions.js'],
   // 工具（缺一个就等于少一道防线）
   ['tools/check-ids.js',     'tools/check-ids.js'],
   ['tools/check-p1-html.js', 'tools/check-p1-html.js'],
@@ -75,6 +81,13 @@ const PAIRS = [
 ];
 
 const sha = p => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+// HTML 一律先把缓存击穿串归一化再比：tools/stamp-version.js 每release都会改 ?v=，
+// 若按字节比，盖过章之后 check-deploy 会永远 DIFF（这不是漂移，是预期行为）。
+const cmp = p => /\.html$/i.test(p)
+  ? crypto.createHash('sha256').update(
+      fs.readFileSync(p, 'utf8').replace(/\?v=[^"&\s]*/g, '?v=__V__')).digest('hex')
+  : sha(p);
+const isHtml = p => /\.html$/i.test(p);
 const size = p => fs.statSync(p).size;
 
 let ok = 0, bad = 0;
@@ -83,9 +96,9 @@ for (const [src, dst] of PAIRS) {
   const a = path.join(PR, src), b = path.join(REPO, dst);
   if (!fs.existsSync(a)) { console.log('MISSING  plat_review/' + src + '   ← 设计侧没同步全'); bad++; continue; }
   if (!fs.existsSync(b)) { console.log('MISSING  ' + dst + '   ← 部署侧没有这个文件（没 cp 过去？）'); bad++; continue; }
-  const ha = sha(a), hb = sha(b);
+  const ha = cmp(a), hb = cmp(b);
   if (ha !== hb) {
-    console.log('DIFF     ' + dst + '   ' + size(a) + 'B/' + ha.slice(0, 8) +
+    console.log('DIFF     ' + dst + (isHtml(dst) ? '（已忽略 ?v=）' : '') + '   ' + size(a) + 'B/' + ha.slice(0, 8) +
                 '  ≠  ' + size(b) + 'B/' + hb.slice(0, 8) + '  (设计侧 ' + src + ')');
     const buf = fs.readFileSync(b);
     if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) console.log('         ⚠ 部署侧带 BOM');

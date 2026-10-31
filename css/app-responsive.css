@@ -1,0 +1,63 @@
+/* =========================================================================
+ * css/app-responsive.css —— 数据平台两页（index / mobile）的窄屏补充
+ *
+ * 为什么叠加而不是改 style.css / mobile.css：
+ *   既有配色与骨架不动（任务书硬约束），只补窄屏与触控两块；
+ *   P6b 合并 CSS 时整段搬进 style.css 即可。
+ *   <link> 顺序必须在 style.css / mobile.css 之后。
+ * ========================================================================= */
+
+/* ---------- 数据平台（index.html）---------- */
+@media (max-width: 900px) {
+  .container { padding: 12px; }
+  .analysis-layout,
+  .fit-layout,
+  .unc-layout,
+  .combine-layout {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+  .table-container,
+  .result-box,
+  .result-panel {
+    overflow-x: auto;         /* 宽表格横向滚动，不撑破页面 */
+  }
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tabs .tab { flex: 1 1 45%; }
+  .calc-grid { grid-template-columns: 1fr !important; }
+  /* 触控目标下限（WCAG 2.5.5 建议 44px） */
+  button, .tab, select { min-height: 42px; }
+  input[type="number"], input[type="text"], input[type="file"] { min-height: 40px; }
+  table input { width: 100%; min-width: 68px; }
+}
+
+/* ---------- 手机采集端（mobile.html）---------- */
+@media (max-width: 520px) {
+  .app-header h1 { font-size: 18px; }
+  .app-header .subtitle { font-size: 11px; }
+  .tab-nav { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tab-btn { flex: 1 1 45%; }
+  .data-table-container { overflow-x: auto; }
+  .data-table { min-width: 520px; }
+  #reticleCanvas { max-width: 100%; }
+}
+
+/* ---------- 可访问性：键盘焦点必须可见 ---------- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.tab:focus-visible,
+.tab-btn:focus-visible {
+  outline: 2px solid #64b5f6;
+  outline-offset: 2px;
+}
+
+/* 提示文字的对比度补足（原来 #888 on #16213e ≈ 4.0:1，偏低） */
+.hint, .is-dim, .bp-result__note, .param-unit {
+  color: #9aa7bd;
+}
