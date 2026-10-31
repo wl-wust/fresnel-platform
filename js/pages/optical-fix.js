@@ -20,10 +20,24 @@
   var BP = global.BP || {};
   var doc = global.document;
 
+  /* ---------------- 取 optical_simulator.js 的顶层绑定 ----------------
+   * ⚠ 它用的是 `let CONFIG` / `let devices` / `let selectedDevice`。
+   * `let`/`const` 在经典脚本里创建的是**全局词法绑定**，不会成为 window 的属性，
+   * 所以窗口对象上并没有 devices 这个属性（只有 var 与 function 声明才会挂上去）。
+   * 它们是同一全局词法作用域里的名字，可以直接按名字取，但必须先 typeof 判存在，
+   * 否则会 ReferenceError。
+   */
+  function getConfig() {
+    try { return typeof CONFIG !== 'undefined' ? CONFIG : undefined; } catch (e) { return undefined; }
+  }
+  function getDevices() {
+    try { return typeof devices !== 'undefined' ? devices : null; } catch (e) { return null; }
+  }
+
   /* ---------------- 唯一换算常量（报告 P1-2 的根因：散落的 ×1000） ---------------- */
-  // 导轨刻度由 optical_simulator.js 的 CONFIG.scale 决定：CONFIG.scale = 0.5 ⇒ 1 px = 2 mm
+  // 导轨刻度由 CONFIG.scale 决定：CONFIG.scale = 0.5 ⇒ 1 px = 2 mm
   function mmPerPx() {
-    var cfg = global.CONFIG;
+    var cfg = getConfig();
     var s = cfg && isFinite(cfg.scale) && cfg.scale > 0 ? cfg.scale : 0.5;
     return 1 / s;
   }
@@ -135,9 +149,9 @@
 
   /* ---------------- 拖拽后把几何反填回面板（面板 = 唯一真值） ---------------- */
   function syncPanelFromDevices() {
-    if (!doc) return;
-    var devs = global.devices;
-    if (!devs || !devs.length) return;
+    if (!doc) return null;
+    var devs = getDevices();
+    if (!devs || !devs.length) return null;
     var find = function (t) {
       for (var i = 0; i < devs.length; i++) if (devs[i].type === t) return devs[i];
       return null;
@@ -168,7 +182,7 @@
     }
     // 二次成像预设：确保导轨上有一个凸透镜元件
     if (key === 'lens' && typeof global.addDevice === 'function') {
-      var devs = global.devices || [];
+      var devs = getDevices() || [];
       var has = false;
       for (var i = 0; i < devs.length; i++) if (devs[i].type === 'lens') has = true;
       if (!has) global.addDevice('lens');
@@ -198,14 +212,11 @@
   global.syncPanelFromDevices = syncPanelFromDevices;
 
   if (doc) {
-    // 拖拽结束就反填面板（Pointer 与 Mouse 都挂，P3b 会统一成 Pointer 一套）
-    var cv = doc.getElementById('opticalCanvas');
-    if (cv) {
-      var onUp = function () { syncPanelFromDevices(); };
-      cv.addEventListener('pointerup', onUp);
-      cv.addEventListener('pointercancel', onUp);
-      cv.addEventListener('mouseup', onUp);
-    }
+    // ⚠ P3c：**不再**在拖拽结束时反填面板。
+    //   原因：示意图的图标尺寸与 1 px = 2 mm 的刻度差约 7 倍，两者无法同时"按比例"和"看得清"。
+    //   实测：面板 z₁=50，而画布元件间距按刻度算是 160 mm；一拖拽面板就被写成 120，
+    //   数字凭空跳变 ⇒ 拖拽只能是示意图操作，参数以右侧面板为唯一真值。
+    //   syncPanelFromDevices 仍保留为显式调用（导出在 API 里），默认不自动触发。
     var go = function () { updateParams(); simulateInterference(); };
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', go);
     else global.setTimeout(go, 0);
