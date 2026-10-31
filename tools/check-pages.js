@@ -31,8 +31,8 @@ function check(name, cond, detail) {
 const PAGES = ['index.html', 'mobile.html', 'optical.html', '404.html'];
 const GONE = ['optical_v2.html', 'js/optical2d.js', 'js/simulation_data.js', 'js/main.js', 'lib/chart.umd.min.js', 'js/main_pure.js', 'js/mobile_merged.js'];
 
-let refs = 0;
 for (const page of PAGES) {
+  let refs = 0;                 // 逐页计数，别跨页累计（否则输出 14/22/35 会误导）
   const p = path.join(REPO, page);
   if (!fs.existsSync(p)) { check('存在 ' + page, false, '文件不存在'); continue; }
   const html = fs.readFileSync(p, 'utf8');
