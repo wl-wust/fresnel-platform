@@ -87,7 +87,7 @@
         var good = Math.abs(diff) <= TOL;
         if (!good) badCount++;
         rows.push([
-          PATH_LABEL[k], F.rel(r.relU), F.pct(ref), F.rel(diff),
+          PATH_LABEL[k], F.rel(r.relU), F.rel(ref), (Math.abs(diff) < TOL ? '0.00%' : F.rel(diff)),
           good ? '一致' : '与表 5.2 不符', r.uses.join(' / ')
         ]);
       });
