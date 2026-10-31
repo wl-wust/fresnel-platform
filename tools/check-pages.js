@@ -29,7 +29,7 @@ function check(name, cond, detail) {
 }
 
 const PAGES = ['index.html', 'mobile.html', 'optical.html'];
-const GONE = ['optical_v2.html', 'js/optical2d.js', 'js/simulation_data.js', 'js/main.js', 'lib/chart.umd.min.js'];
+const GONE = ['optical_v2.html', 'js/optical2d.js', 'js/simulation_data.js', 'js/main.js', 'lib/chart.umd.min.js', 'js/main_pure.js', 'js/mobile_merged.js'];
 
 let refs = 0;
 for (const page of PAGES) {

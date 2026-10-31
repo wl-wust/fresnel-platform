@@ -60,6 +60,9 @@ const PAIRS = [
   ['css/optical-responsive.css', 'css/optical-responsive.css'],
   ['tools/check-pages.js',    'tools/check-pages.js'],
   ['tools/check-globals.js',  'tools/check-globals.js'],
+  ['pages/mobile.js',        'js/pages/mobile.js'],
+  ['build/mobile.html',      'mobile.html'],
+  ['tools/check-p4-html.js', 'tools/check-p4-html.js'],
   // 工具（缺一个就等于少一道防线）
   ['tools/check-ids.js',     'tools/check-ids.js'],
   ['tools/check-p1-html.js', 'tools/check-p1-html.js'],
