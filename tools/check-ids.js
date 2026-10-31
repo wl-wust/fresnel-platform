@@ -17,9 +17,9 @@ const BASES = [ROOT, ALT, path.join(ALT, 'site'), path.join(ROOT, 'fresnel-platf
 
 // 页面 → 参与检查的 JS（core 里只有真正查 DOM 的文件才算）
 const MAP = [
-  { html: 'index.html',  js: ['pages/pc.js', 'core/ui.js'] },
-  { html: 'mobile.html', js: ['pages/mobile.js', 'core/ui.js'] },
-  { html: 'optical.html', js: ['pages/optical.js'] }
+  { html: 'index.html',  js: ['js/pages/pc.js', 'js/core/ui.js'] },
+  { html: 'mobile.html', js: ['js/pages/mobile.js', 'core/ui.js'] },
+  { html: 'optical.html', js: ['js/pages/optical.js'] }
 ];
 
 // 动态创建 / 可选容器，允许不存在（缺了只是功能降级，不是错误）

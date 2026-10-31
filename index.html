@@ -12,7 +12,6 @@
 
     <link rel="stylesheet" href="css/style.css?v=3.0">
 
-    <script src="lib/chart.umd.min.js"></script>
 
 </head>
 
@@ -88,15 +87,16 @@
 
                     <h3>基本公式法</h3>
 
-                    <div class="form-group"><label>d (mm) 虚光源间距</label><input type="number" id="d_value" step="0.01" value="0.5"></div>
+                    <div class="form-group"><label>d (mm) 虚光源间距</label><input type="number" id="d_value" step="0.01" value="0.90213"></div>
 
-                    <div class="form-group"><label>D (mm) 观察距离</label><input type="number" id="D_value" step="1" value="500"></div>
+                    <div class="form-group"><label>D (mm) 观察距离</label><input type="number" id="D_value" step="1" value="1000"></div>
 
-                    <div class="form-group"><label>k (mm/px) 像素当量</label><input type="number" id="pixel_size" step="0.0001" value="0.008"></div>
+                    <div class="form-group"><label>k (mm/px) 像素当量</label><input type="number" id="pixel_size" step="0.0001" value="0.004"></div>
 
-                    <div class="form-group"><label>Δx (px) 条纹间距</label><input type="number" id="fringe_period_px" step="0.1" value="10"></div>
+                    <div class="form-group"><label>Δx (px) 条纹间距</label><input type="number" id="fringe_period_px" step="0.1" value="163.3"></div>
 
                     <button onclick="calcWavelength()">计算波长</button>
+                    <button onclick="fillReportParams()">填入报告参数（表 5.1）</button>
 
                     <div id="wavelengthResult" class="result-box"></div>
 
@@ -112,6 +112,8 @@
 
                     <div class="form-group"><label>激光波长 (nm)</label><input type="number" id="lambda_laser" step="1" value="650"></div>
 
+                    <div class="form-group"><label>n_Na 折射率（589.3 nm）</label><input type="number" id="n_na" step="0.0001" value="1.5168"></div>
+                    <div class="form-group"><label>n_ref 折射率（650 nm）</label><input type="number" id="n_ref" step="0.0001" value="1.5145"></div>
                     <button onclick="calcRatioMethod()">比值法计算</button>
 
                     <div id="ratioResult" class="result-box"></div>
@@ -175,6 +177,7 @@
                 </div>
 
                 <div id="fitResult" class="result-box"></div>
+                <div id="fitResiduals" class="result-box"></div>
 
             </div>
 
@@ -254,11 +257,13 @@
 
                     <label>标准值(589.3nm): <input type="number" id="standard_value" value="589.3" step="0.1"></label>
 
+                    <button onclick="fillReportPaths()">填入报告三路径（表 5.2）</button>
                     <button onclick="comparePathsTable()">执行加权合成</button>
 
                 </div>
 
                 <div id="compareResult" class="result-box"></div>
+                <div id="compareTable" class="result-box"></div>
 
             </div>
 
@@ -290,7 +295,14 @@
 
     </div>
 
-    <script src="js/main_pure.js?v=3.0"></script>
+    <script src="js/physics.js?v=bea3d23"></script>
+    <script src="js/core/fmt.js?v=bea3d23"></script>
+    <script src="js/core/ui.js?v=bea3d23"></script>
+    <script src="js/core/store.js?v=bea3d23"></script>
+    <script src="js/core/fit.js?v=bea3d23"></script>
+    <script src="js/core/plot.js?v=bea3d23"></script>
+    <script src="js/core/api.js?v=bea3d23"></script>
+    <script src="js/pages/pc.js?v=bea3d23"></script>
 
 </body>
 

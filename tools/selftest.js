@@ -1,5 +1,7 @@
-// physics.js 自检：node test_physics.js
-const P = require('./physics.js');
+// tools/selftest.js —— 数值内核口径自检（19 项 = 13 旧 + 1 冻结守卫 + 5 表8.1折叠）
+// 放置位置：<仓库>/tools/selftest.js；同目录需有 physics.snapshot.js；依赖 ../js/physics.js
+// 运行：node tools/selftest.js   期望：19 pass / 0 fail
+const P = require('../js/physics.js');
 
 function synth(n, periodPx, vis, noise, seed) {
   let s = seed || 1;
@@ -67,6 +69,24 @@ console.log('      sd=' + ta.sd.toFixed(3) + ' nm  uA=' + ta.uA.toFixed(3) +
 
 // 7. 像素当量
 near('pixelScale', P.pixelScale({ L: 5, N: 1250 }).k, 0.004, 1e-9);
+
+// 9. 冻结守卫：追加前的冻结段必须逐字节未变
+const fs = require('fs'), path = require('path');
+const cur = fs.readFileSync(path.join(__dirname, '../js/physics.js'), 'utf8');
+const snap = fs.readFileSync(path.join(__dirname, 'physics.snapshot.js'), 'utf8');
+const anchor = '  var API = {';
+const head = snap.slice(0, snap.indexOf(anchor));
+const okFrozen = cur.startsWith(head);
+console.log((okFrozen ? 'PASS ' : 'FAIL ') + 'frozen section untouched');
+okFrozen ? ok++ : bad++;
+
+// 10. 表8.1 → 三路径折叠（口径金标准）
+const comps = {}; P.budgetPreset().forEach(p => comps[p.key] = p.relU);
+near('foldD u(d)/d',       P.foldD(comps), 0.0011992, 3e-6);
+near('budget basic relU',  P.uncertaintyBudget({ path: 'basic', comps }).relU, 0.0012993, 3e-6);
+near('budget trace relU',  P.uncertaintyBudget({ path: 'trace', comps }).relU, 0.0012993, 3e-6);
+near('budget ratio relU',  P.uncertaintyBudget({ path: 'ratio', comps }).relU, 0.0009728, 3e-6);
+near('budget mag relU',    P.uncertaintyBudget({ path: 'mag',   comps }).relU, 0.0013929, 3e-6);
 
 console.log('\n' + (bad === 0 ? '全部通过' : bad + ' 项未通过') + '（' + ok + ' pass / ' + bad + ' fail）');
 process.exit(bad === 0 ? 0 : 1);
