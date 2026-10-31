@@ -186,6 +186,23 @@
     });
   }
 
+  /* ---------------- 多帧统计（表 6.1 的口径） ----------------
+   * ⚠ 单帧必须能走通：typeA 要求 ≥2 个值，若直接调它，
+   *   一条只有 1 帧的 record.json 就会以"至少需要 2 个测量值"整条导入失败。
+   *   n=1 时返回 mean 与 single=true，sd/uA 留 NaN，由页面显示"—"。
+   */
+  function framesStats(values) {
+    var v = (values || []).map(Number).filter(function (x) { return isFinite(x); });
+    if (!v.length) throw new Error('没有可用的帧');
+    if (v.length === 1) {
+      return { n: 1, mean: v[0], sd: NaN, uA: NaN, relSd: NaN, single: true };
+    }
+    var P = phys();
+    if (!P || typeof P.typeA !== 'function') throw new Error('core/fringe.js 需要先加载 physics.js');
+    var a = P.typeA(v);
+    return { n: a.n, mean: a.mean, sd: a.sd, uA: a.uA,
+             relSd: isFinite(a.relUA) ? a.relUA : (a.mean ? a.sd / a.mean : NaN), single: false };
+  }
   /* ---------------- 多帧统计（表 6.1 的口径） ---------------- */
   function analyzeFrames(files, opts) {
     var list = Array.prototype.slice.call(files || []);
@@ -201,13 +218,9 @@
     }, Promise.resolve()).then(function () {
       var ok = per.filter(function (x) { return isFinite(x.deltaXmm); });
       if (!ok.length) throw new Error('所有帧都没提取成功');
-      var n = ok.length;
-      var mean = ok.reduce(function (a, b) { return a + b.deltaXmm; }, 0) / n;
-      var sd = n > 1
-        ? Math.sqrt(ok.reduce(function (a, b) { return a + (b.deltaXmm - mean) * (b.deltaXmm - mean); }, 0) / (n - 1))
-        : NaN;
-      return { n: n, failed: per.length - n, meanMm: mean, sdMm: sd,
-               relSd: mean ? sd / mean : NaN, perFrame: per };
+      var st = framesStats(ok.map(function (x) { return x.deltaXmm; }));
+      return { n: st.n, failed: per.length - st.n, meanMm: st.mean, sdMm: st.sd,
+               relSd: st.relSd, single: st.single, perFrame: per };
     });
   }
 
@@ -237,6 +250,7 @@
     analyzeImageData: analyzeImageData,
     analyzeFile: analyzeFile,
     analyzeFrames: analyzeFrames,
+    framesStats: framesStats,
     selfTest: selfTest,
     scoreOf: scoreOf
   };

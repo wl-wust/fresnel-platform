@@ -85,16 +85,17 @@
       });
       if (!lams.length) throw new Error('所有帧都无法解算，请检查 k 与 d、D');
 
-      var a = BP.physics.typeA(lams);
+      // 单帧也要能走通：framesStats 在 n=1 时只给 mean，不抛错（typeA 要求 ≥2）
+      var a = BP.fringe.framesStats(lams);
       var rows = [
         { label: '记录时间', value: (rec.created || '').replace('T', ' ').slice(0, 19) || '—' },
         { label: '帧数', value: frames.length + '（成功 ' + lams.length + '）' },
         { label: '像素当量 k', value: F.sci(k) + ' mm/px' },
         { label: 'd / D', value: F.mm(d) + ' mm / ' + F.num(D, 0) + ' mm' },
-        { label: 'λ 均值', value: F.lam(a.mean), cls: 'is-key' },
-        { label: '帧间标准差 s', value: isFinite(a.sd) ? F.num(a.sd, 3) + ' nm' : '—' },
-        { label: 'A 类 u_A = s/√n', value: isFinite(a.uA) ? F.num(a.uA, 3) + ' nm' : '—' },
-        { label: '相对标准差', value: isFinite(a.sd) && a.mean ? F.pct(a.sd / a.mean) : '—' }
+        { label: 'λ' + (a.single ? '' : ' 均值'), value: F.lam(a.mean), cls: 'is-key' },
+        { label: '帧间标准差 s', value: a.single ? '—（单帧，A 类需 ≥2 帧）' : F.num(a.sd, 3) + ' nm' },
+        { label: 'A 类 u_A = s/√n', value: a.single ? '—' : F.num(a.uA, 3) + ' nm' },
+        { label: '相对标准差', value: a.single ? '—' : F.pct(a.relSd) }
       ];
       BP.ui.result($('phoneRecordResult'), rows, { caption: '手机采集 → PC 解算（表 6.1 口径：多帧均值与帧间标准差）' });
       BP.store.saveHistory('phoneRecord', { n: lams.length, meanNm: a.mean, sdNm: a.sd });

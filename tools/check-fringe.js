@@ -79,5 +79,16 @@ const r160 = fringe.analyzeImageData(makeImage(600, 100, true).data, 600, 100, {
 check('600px 宽图里 120px 周期的 Δx 落在 0.480 mm', Math.abs(r160.deltaXmm - 0.480) < 0.004,
       r160.deltaXmm.toFixed(4) + ' mm');
 
+/* ⑥ 多帧统计：单帧不能抛错（曾导致只有 1 帧的 record.json 整条导入失败） */
+const s1 = fringe.framesStats([589.3]);
+check('单帧：给出均值且不抛错', s1.n === 1 && Math.abs(s1.mean - 589.3) < 1e-9 && s1.single === true,
+      'mean=' + s1.mean + ' sd=' + s1.sd);
+check('单帧：sd/uA 为 NaN 而不是 0', !isFinite(s1.sd) && !isFinite(s1.uA));
+const s5 = fringe.framesStats([589.1, 589.3, 589.2, 589.4, 589.2]);
+check('5 帧：均值与 A 类分量', s5.n === 5 && Math.abs(s5.mean - 589.24) < 0.005 && isFinite(s5.uA),
+      'mean=' + s5.mean.toFixed(3) + ' uA=' + s5.uA.toFixed(3) + ' relSd=' + (s5.relSd * 100).toFixed(4) + '%');
+let threw2 = null;
+try { fringe.framesStats([]); } catch (e) { threw2 = e; }
+check('零帧 → 抛可读错误', !!threw2 && /没有可用/.test(threw2.message));
 console.log('\n' + (bad === 0 ? 'P5 条纹提取门禁通过' : bad + ' 项不通过') + '（' + ok + ' pass / ' + bad + ' fail）');
 process.exit(bad === 0 ? 0 : 1);
