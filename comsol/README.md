@@ -8,8 +8,10 @@
 
 - `FresnelBiprism_RayOptics.mph`：COMSOL 6.4 模型，已包含几何、材料、Ray Optics 物理场、网格、射线追踪解、轨迹绘图和导出节点。
 - `FresnelBiprism_RayOptics_with_appearance.mph`：保留原光学求解，同时新增独立 `mech` 几何序列的机械外观版。
+- `FresnelBiprism_2D_View.mph`：完整仪器的二维展示模型，包含三组光线曲线、光屏刻度和绿色干涉区。
 - `FresnelBiprism_OpticalPath_Interference.png`：三视图汇总，展示全光路、棱镜放大和屏前干涉区。
 - `FresnelBiprism_Apparatus_Appearance.png`：教学示意版机械装置外观图。
+- `FresnelBiprism_2D_View.png`：二维全仪器、光路和干涉区总览图。
 - `FresnelBiprism_RayOptics.png`：COMSOL 直接导出的三维射线轨迹图。
 - `FresnelBiprism_RayOptics.txt`：射线轨迹原始数据，可用 Excel、MATLAB 或 Python 继续分析。
 - `FresnelBiprism_metrics.json`：平台与 COMSOL 的数值对比指标。
@@ -20,6 +22,9 @@
 - `add_mechanical_appearance.py`：创建机械外观版 `.mph`。
 - `render_appearance.py`：生成机械装置外观图。
 - `verify_appearance.py`：验证外观序列存在且光学解没有丢失。
+- `build_2d_view.py`：生成二维 COMSOL 展示模型和三组 sectionwise 光线数据。
+- `render_2d_view.py`：生成二维全仪器光路总览图。
+- `verify_2d_view.py`：验证二维模型、光线曲线、干涉区和原模型完整性。
 
 ## 参数口径
 
@@ -111,6 +116,31 @@ python plot_results.py
 外观预览：
 
 ![机械装置外观](FresnelBiprism_Apparatus_Appearance.png)
+
+## 二维全仪器光路与干涉区
+
+打开 `FresnelBiprism_2D_View.mph`，在模型树点击 `几何`，即可看到：
+
+- 完整二维仪器：导轨、光源、双棱镜夹持架和光屏。
+- 黄色的点光源入射扇形。
+- 橙红色的上半棱镜折射束。
+- 蓝色的下半棱镜折射束。
+- 绿色干涉交叠区。
+- 光屏上的 9 个条纹位置刻度。
+
+二维模型使用 `Form Assembly`，因此仪器、光线和干涉区不会被合并，颜色能够分别保留。
+
+![二维全仪器光路](FresnelBiprism_2D_View.png)
+
+重新生成：
+
+```powershell
+python build_2d_view.py
+python render_2d_view.py
+python verify_2d_view.py
+```
+
+二维模型是展示模型；光线由已验证的 3D 薄片 Ray Optics 结果投影得到。COMSOL 6.4 当前环境创建原生 2D `Geometrical Optics` 接口会触发内部 `StackOverflowError`，因此不使用该接口重新求解。
 
 ## 查看干涉区
 

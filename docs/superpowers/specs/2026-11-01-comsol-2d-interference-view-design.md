@@ -34,10 +34,12 @@ COMSOL 6.4 在当前 Windows 环境中创建 2D `Geometrical Optics` 接口会�
 - 光屏：`x=1000, y=-110 ... 110`。
 - 导轨与支架：使用二维矩形轮廓表示。
 
-模型包含两个独立几何序列：
+模型使用一个二维几何序列 `view2d`，末端动作设为 `Form Assembly`。同一序列包含：
 
-- `apparatus2d`：仪器轮廓、干涉区填充面和光屏条纹刻度，只用于显示。
-- `raycurves`：由已验证三维轨迹转换得到的二维曲线。使用三个 `InterpolationCurve` 特征 `rays_incoming`、`rays_upper`、`rays_lower`，分别读取 sectionwise 数据文件。每条光线是独立曲线段，不创建实体域，不参与网格和物理场。
+- 仪器轮廓、干涉区填充面和光屏条纹刻度。
+- 三个 `InterpolationCurve` 特征 `rays_incoming`、`rays_upper`、`rays_lower`，分别读取 sectionwise 数据文件。每条光线是独立曲线段，不创建实体域，不参与网格和物理场。
+
+使用单一 Assembly 序列是为了让 COMSOL 图形窗口同时显示仪器、光线和绿色干涉区，并避免重叠对象被 Form Union 合并后丢失颜色。
 
 干涉区用单独的多边形区域表示，边界来自上下两组出射光线的包络：
 
@@ -63,13 +65,13 @@ COMSOL 6.4 在当前 Windows 环境中创建 2D `Geometrical Optics` 接口会�
 4. 按玻璃入射位置 `y>0` 或 `y<0` 分为上下两组。
 5. 分别写出 `rays_incoming.txt`、`rays_upper.txt`、`rays_lower.txt`，格式为 COMSOL sectionwise 曲线数据。
 6. 对出射直线做包络，生成干涉区多边形。
-7. 将仪器轮廓、三个 `InterpolationCurve` 和干涉区写入二维 COMSOL 模型。
+7. 将仪器轮廓、三个 `InterpolationCurve` 和干涉区写入同一个 `view2d` Assembly 几何序列。
 8. 同时用 Matplotlib 输出高清二维总览图。
 
 ## 验证
 
-- `FresnelBiprism_2D_View.mph` 能正常加载并包含两个二维几何序列。
-- 二维模型中的光线数量与当前识别出的 80 条折射光线一致。
+- `FresnelBiprism_2D_View.mph` 能正常加载并包含二维几何序列 `view2d`。
+- 二维模型只显示实际落到 `±110 mm` 光屏内的 30 条折射光线，其中上、下光束各 15 条。
 - 干涉区起点约为 `192 mm`，屏面宽度约为 `3.015 mm`。
 - 原 `FresnelBiprism_RayOptics.mph`、Ray Optics 解和轨迹绘图仍存在。
 - 导出图尺寸不低于 1800×1000 像素。
