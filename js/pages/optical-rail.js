@@ -94,6 +94,32 @@
         out.m = m;
         out.dxPrime = dxP;
         out.beta = out.dx ? dxP / out.dx : NaN;
+
+        // 是否成清晰像：屏与像面之差足够小。成清晰像时屏上是**两条细线**（两个虚光源的像），
+        // 不是条纹 —— Δx′ 会在像面处趋于 0，画条纹只会得到一片灰糊。
+        out.focusGap = Math.abs(L2 - v);
+        out.inFocus = out.focusGap <= Math.max(0.3, 0.02 * v);
+        out.focusTol = Math.max(0.3, 0.02 * v);
+
+        // Bessel 二次成像：屏距 L = 棱脊到屏（= u + L2）。L ≥ 4f 时有两个透镜位置
+        // 能把两个虚光源成在屏上，分别给放大像与缩小像；两像间距满足 d = √(d′₁·d′₂)。
+        var L = u + L2;
+        if (L >= 4 * f) {
+          var s2 = Math.sqrt(L * L - 4 * f * L);
+          var u1 = (L - s2) / 2, u2 = (L + s2) / 2;
+          var vv = function (uu) { return uu * f / (uu - f); };
+          var bb = function (uu) { return vv(uu) / uu; };
+          var b1 = bb(u1), b2 = bb(u2);
+          out.bessel = {
+            L: L, u1: u1, u2: u2, beta1: b1, beta2: b2,
+            d1: b1 * d, d2: b2 * d,
+            dFromImages: Math.sqrt(b1 * d * b2 * d)   // 应等于 d
+          };
+        } else {
+          out.bessel = null;
+          out.besselNote = '屏距 L = ' + L.toFixed(0) + ' mm < 4f′ = ' + (4 * f).toFixed(0) +
+                           ' mm，不出现两次成像（Bessel 双位置）';
+        }
       }
     }
     return out;
@@ -181,10 +207,24 @@
     setText('result_D', r.D.toFixed(1) + ' mm');
 
     if (r.lens && r.lens.image) {
-      // 有透镜：屏上看到的是像光源的条纹
       setText('result_d', r.d.toFixed(4) + ' mm → d′ ' + r.dPrime.toFixed(4));
-      setText('result_dx', r.dxPrime.toFixed(4) + ' mm（像面）');
-      setText('result_M', '|β| = ' + r.m.toFixed(2) + '，Δx′/Δx = ' + r.beta.toFixed(2));
+      if (r.inFocus) {
+        setText('result_dx', '在焦：两条细线，间距 d′ = ' + r.dPrime.toFixed(4) + ' mm');
+        setText('result_M', '|β| = ' + r.m.toFixed(2) + '（本位置成清晰像）');
+      } else {
+        setText('result_dx', r.dxPrime.toFixed(4) + ' mm（离焦，条纹）');
+        setText('result_M', '|β| = ' + r.m.toFixed(2) + '，Δx′/Δx = ' + r.beta.toFixed(2) +
+                            '，离像面 ' + r.focusGap.toFixed(1) + ' mm');
+      }
+      if (r.bessel) {
+        setText('result_M', (doc.getElementById('result_M') ? doc.getElementById('result_M').textContent : '') +
+          '｜放大像 u₁=' + r.bessel.u1.toFixed(0) + ' mm(d′=' + r.bessel.d1.toFixed(3) + ')，' +
+          '缩小像 u₂=' + r.bessel.u2.toFixed(0) + ' mm(d′=' + r.bessel.d2.toFixed(3) + ')，' +
+          '√(d′₁d′₂)=' + r.bessel.dFromImages.toFixed(4) + ' ≈ d');
+      } else if (r.besselNote) {
+        setText('result_M', (doc.getElementById('result_M') ? doc.getElementById('result_M').textContent : '') +
+          '｜' + r.besselNote);
+      }
     } else {
       setText('result_d', r.d.toFixed(4) + ' mm');
       setText('result_dx', r.dx.toFixed(4) + ' mm');
@@ -201,6 +241,29 @@
 
     var W = cv.width || 260, H = cv.height || 150;
     var ctx = cv.getContext('2d');
+
+    // 在焦：屏上是两个虚光源的像 —— 两道细线，不是条纹
+    if (r.lens && r.lens.image && r.inFocus) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      var half = r.dPrime / 2;                       // mm
+      var lineW = Math.max(1.5, W / 220);
+      [-half, half].forEach(function (pos) {
+        var cx = (pos / FOV_MM + 0.5) * (W - 1);
+        if (cx < -4 || cx > W + 4) return;
+        var grd = ctx.createLinearGradient(cx - 4 * lineW, 0, cx + 4 * lineW, 0);
+        grd.addColorStop(0, 'rgba(255,255,255,0)');
+        grd.addColorStop(0.5, 'rgba(255,255,255,1)');
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(cx - 4 * lineW, 0, 8 * lineW, H);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(cx - lineW / 2, 0, lineW, H);
+      });
+      setText('theoretical_dx', '在焦：两条细线，间距 d′ = ' + r.dPrime.toFixed(4) + ' mm');
+      setText('visibility', '本位置成清晰像，无条纹');
+      return;
+    }
     // 锚定固定屏面视场：Δx 一变，条纹数目立刻变（这才是"移动光屏看得出来"的关键）
     var dxMm = r.lens && r.lens.image ? r.dxPrime : r.dx;
     var b = num('b', 0.08);
@@ -326,6 +389,10 @@
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', function () { global.setTimeout(boot, 200); });
     else global.setTimeout(boot, 200);
   }
+
+  // 运行时版本标记：浏览器 Console 里输 BP.build 就能确认线上是哪一版
+  // （靠字段有没有来猜版本太费劲，直接给一个可读的标记）
+  BP.build = { stage: 'p7b', rail: 1, bessel: 1, focus: 1, fovMm: FOV_MM, railSpanMm: RAIL_SPAN_MM };
 
   BP.pages = BP.pages || {};
   BP.pages.opticalRail = API;

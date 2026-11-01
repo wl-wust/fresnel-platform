@@ -86,5 +86,31 @@ let threw = null;
 try { rail.solveScene({ ...BASE, n: 0.9 }); } catch (e) { threw = e; }
 check('n ≤ 1 抛可读错误', !!threw && /折射率/.test(threw.message));
 
+/* ⑩ Bessel 二次成像：L ≥ 4f 时两个透镜位置，且 d = √(d′₁·d′₂) */
+const B = rail.solveScene({ ...BASE, z2: 950, lens: { f: 150, u: 186.68, L2: 950 - 186.68 } });
+check('L ≥ 4f′ 时给出两个透镜位置', !!B.bessel && B.bessel.u1 > 0 && B.bessel.u2 > 0,
+      B.bessel ? 'u₁=' + B.bessel.u1.toFixed(1) + ' u₂=' + B.bessel.u2.toFixed(1) : '无');
+check('两个位置的放大率互为倒数（β₁·β₂ = 1）',
+      !!B.bessel && Math.abs(B.bessel.beta1 * B.bessel.beta2 - 1) < 1e-9,
+      B.bessel ? (B.bessel.beta1 * B.bessel.beta2).toFixed(9) : '—');
+check('d = √(d′₁·d′₂)（二次成像法测 d 的依据）',
+      !!B.bessel && Math.abs(B.bessel.dFromImages - r0.d) < 1e-9,
+      B.bessel ? B.bessel.dFromImages.toFixed(6) + ' vs d=' + r0.d.toFixed(6) : '—');
+check('大幅放大像的 d′ 明显大于缩小像',
+      !!B.bessel && B.bessel.d1 > B.bessel.d2,
+      B.bessel ? B.bessel.d1.toFixed(3) + ' vs ' + B.bessel.d2.toFixed(3) : '—');
+
+/* ⑪ 在焦判定：屏落在像面上 ⇒ inFocus，屏上是两条细线而不是条纹 */
+check('u=u₁ 且屏在像面 ⇒ 判定为在焦', B.inFocus === true,
+      'focusGap=' + (B.focusGap !== undefined ? B.focusGap.toFixed(3) : '—') + ' mm');
+const offFocus = rail.solveScene({ ...BASE, z2: 950, lens: { f: 150, u: 300, L2: 650 } });
+check('离焦位置 ⇒ inFocus 为假（仍按条纹画）', offFocus.inFocus === false,
+      'focusGap=' + offFocus.focusGap.toFixed(1) + ' mm');
+
+/* ⑫ L < 4f′ 时必须说明"不出现两次成像"，而不是硬给个数 */
+const noBessel = rail.solveScene({ ...BASE, z2: 500, lens: { f: 150, u: 200, L2: 300 } });
+check('L < 4f′ ⇒ 无 Bessel 双位置且给出说明',
+      noBessel.bessel === null && /4f/.test(noBessel.besselNote || ''), noBessel.besselNote);
+
 console.log('\n' + (bad === 0 ? 'P7 空间模型门禁通过' : bad + ' 项不通过') + '（' + ok + ' pass / ' + bad + ' fail）');
 process.exit(bad === 0 ? 0 : 1);
