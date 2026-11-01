@@ -19,6 +19,9 @@
   // 本文件用到的静态 DOM id（tools/check-ids.js 据此核对）
   var IDS = ['previewBox', 'video', 'cameraControls', 'fileInput',
              'param_d', 'param_D', 'curK', 'captureResult',
+             'sessionSelect', 'methodSelect', 'roleSelect', 'roleStatus',
+             'roleSummary', 'frameGallery',
+             'aeff_dx', 'aeff_dw', 'aeff_lambda', 'aeffResult',
              'cal_k', 'cal_L', 'cal_N', 'calResult',
              'reticleFile', 'reticleCanvas', 'retPix', 'retL', 'retResult', 'currentK',
              'dataTableBody', 'uncInputs', 'uncResult',
@@ -30,6 +33,12 @@
 
   var cam = { stream: null, file: null };
   var ret = { img: null, scale: 1, pts: [] };
+  var METHOD_LABEL = {
+    basic: '基本公式',
+    ratio: '比值法',
+    magnification: '横向放大率法',
+    trace: '光线追迹法'
+  };
 
   function num(id, dflt) {
     var el = $(id);
@@ -39,6 +48,35 @@
   }
   function setText(id, t) { var el = $(id); if (el) el.textContent = t; }
   function show(id, on) { var el = $(id); if (el) el.style.display = on ? 'block' : 'none'; }
+  function syncKToSession(k, meta) {
+    var session = activeSession();
+    if (!session || !S()) return;
+    BP.sessions.updateSession(session.id, {
+      calibration: {
+        k_mm_px: k,
+        source: (meta && meta.source) || 'manual',
+        L_mm: meta && meta.L,
+        N_px: meta && meta.N,
+        at: new Date().toISOString()
+      }
+    });
+  }
+  function syncParamsToSession() {
+    var session = activeSession();
+    if (!session || !S()) return;
+    BP.sessions.updateSession(session.id, {
+      params: {
+        d: num('param_d', REPORT.d),
+        D: num('param_D', REPORT.D),
+        a: 50,
+        A: 1.0,
+        nNa: REPORT.nNa,
+        nRef: REPORT.nRef,
+        b: 0.08,
+        lamRef: 650
+      }
+    });
+  }
   function el(tag, cls, text) { var n = doc.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = String(text); return n; }
   function td(node) { var c = doc.createElement('td'); c.appendChild(node); return c; }
   function input(type, cls, val) {
@@ -60,7 +98,7 @@
     BP.ui.$$('.tab-page').forEach(function (t) { t.classList.remove('active'); });
     if (btn) btn.classList.add('active');
     // 读屏器靠 aria-selected 判断当前页签，必须与视觉 active 同步
-    BP.ui.$('.tab-btn').forEach(function (t) { t.setAttribute('aria-selected', t === btn ? 'true' : 'false'); });
+    BP.ui.$$('.tab-btn').forEach(function (t) { t.setAttribute('aria-selected', t === btn ? 'true' : 'false'); });
 
     var p = $(name); if (p) p.classList.add('active');
   }
@@ -70,6 +108,220 @@
     });
   }
   function switchUI() { global.location.href = 'index.html'; }
+
+  /* ---------------- 方法优先：测量会话与角色 ---------------- */
+  function S() { return BP.sessions; }
+  function activeSession() { return S() && S().getActiveSession(); }
+  function methodLabel(method) { return METHOD_LABEL[method] || method; }
+  function sessionText(s) {
+    return methodLabel(s.method) + ' · ' + (s.title || s.id) +
+      ' · ' + String(s.created || '').replace('T', ' ').slice(0, 16);
+  }
+
+  function ensureSession() {
+    var current = activeSession();
+    if (current) return current;
+    var method = $('methodSelect') ? $('methodSelect').value : 'ratio';
+    return S().createSession({
+      method: method,
+      title: '现场采集'
+    });
+  }
+
+  function renderSessions() {
+    var sel = $('sessionSelect');
+    if (!sel || !S()) return;
+    var sessions = S().listSessions();
+    var active = activeSession();
+    BP.ui.clear(sel);
+    sessions.forEach(function (s) {
+      var option = doc.createElement('option');
+      option.value = s.id;
+      option.textContent = sessionText(s);
+      if (active && active.id === s.id) option.selected = true;
+      sel.appendChild(option);
+    });
+    if (active && $('methodSelect')) $('methodSelect').value = active.method;
+  }
+
+  function renderRoleOptions() {
+    var sel = $('roleSelect');
+    if (!sel || !S()) return;
+    var session = activeSession();
+    var method = session ? session.method : ($('methodSelect') ? $('methodSelect').value : 'ratio');
+    var roles = S().requiredRoles(method).concat(['calibration']);
+    var previous = sel.value;
+    BP.ui.clear(sel);
+    roles.forEach(function (role) {
+      var option = doc.createElement('option');
+      option.value = role;
+      option.textContent = S().ROLE_LABEL[role] || role;
+      sel.appendChild(option);
+    });
+    if (roles.indexOf(previous) >= 0) sel.value = previous;
+  }
+
+  function renderRoleStatus() {
+    var host = $('roleStatus');
+    var session = activeSession();
+    if (!host || !session || !S()) return;
+    BP.ui.clear(host);
+    var roles = S().requiredRoles(session.method);
+    roles.forEach(function (role) {
+      var stat = S().roleStats(session.id, role);
+      var chip = el('span', 'role-chip ' + (stat.n ? 'is-done' : 'is-missing'));
+      chip.textContent = stat.label + '：' + stat.n + ' 帧';
+      host.appendChild(chip);
+    });
+    if (session.method === 'trace') {
+      var trace = el('span', 'role-chip is-done',
+        'MATLAB 严格追迹 d=' + S().TRACE_PRESET.d_mm.toFixed(5) + ' mm');
+      host.appendChild(trace);
+    }
+  }
+
+  function renderRoleSummary() {
+    var host = $('roleSummary');
+    var session = activeSession();
+    var role = $('roleSelect') ? $('roleSelect').value : 'sodium';
+    if (!host || !session || !S()) return;
+    var stat = S().roleStats(session.id, role);
+    if (!stat.n) {
+      show('roleSummary', false);
+      return;
+    }
+    BP.ui.result(host, [
+      { label: '角色', value: stat.label, cls: 'is-key' },
+      { label: '启用帧数', value: String(stat.n) },
+      { label: 'Δx 均值', value: isFinite(stat.meanPx) ? F.px(stat.meanPx) + ' px' : '—' },
+      { label: 'Δx 标准差', value: isFinite(stat.sdPx) ? F.px(stat.sdPx) + ' px' : '—（单帧）' }
+    ], { caption: sessionText(session) });
+    show('roleSummary', true);
+  }
+
+  function renderFrameGallery() {
+    var host = $('frameGallery');
+    var session = activeSession();
+    var role = $('roleSelect') ? $('roleSelect').value : 'sodium';
+    if (!host || !session || !S()) return;
+    BP.ui.clear(host);
+    var frames = S().listFrames(session.id, role);
+    if (!frames.length) {
+      host.appendChild(el('p', 'is-dim', '当前角色还没有照片。拍照后会追加到这里，不会覆盖旧照片。'));
+      return;
+    }
+    frames.forEach(function (frame, index) {
+      var card = el('div', 'frame-card' + (frame.excluded ? ' is-excluded' : ''));
+      var img = doc.createElement('img');
+      img.alt = 'frame ' + (index + 1);
+      card.appendChild(img);
+      S().getFrameBlob(frame.imageKey).then(function (blob) {
+        if (blob) img.src = global.URL.createObjectURL(blob);
+      }).catch(function () {});
+      var meta = el('div', 'frame-meta',
+        '#' + (index + 1) + ' · ' +
+        (isFinite(frame.deltaXPx) ? frame.deltaXPx.toFixed(1) + ' px' : '未识别'));
+      card.appendChild(meta);
+      var actions = el('div', 'frame-actions');
+      var toggle = el('button', 'btn-mini', frame.excluded ? '启用' : '排除');
+      toggle.addEventListener('click', function () {
+        S().setFrameExcluded(session.id, frame.id, !frame.excluded);
+        renderAllSessionUI();
+      });
+      var remove = el('button', 'btn-mini btn-danger', '删除');
+      remove.addEventListener('click', function () {
+        S().removeFrame(session.id, frame.id).then(renderAllSessionUI).catch(fail);
+      });
+      actions.appendChild(toggle);
+      actions.appendChild(remove);
+      card.appendChild(actions);
+      host.appendChild(card);
+    });
+  }
+
+  function renderAllSessionUI() {
+    renderSessions();
+    renderRoleOptions();
+    renderRoleStatus();
+    renderRoleSummary();
+    renderFrameGallery();
+  }
+
+  function createSessionFromUI() {
+    try {
+      var method = $('methodSelect') ? $('methodSelect').value : 'ratio';
+      S().createSession({
+        method: method,
+        title: '现场采集'
+      });
+      renderAllSessionUI();
+      BP.ui.alert('已新建' + methodLabel(method) + '会话', 'ok');
+    } catch (e) { fail(e); }
+  }
+
+  function onSessionChange() {
+    var sel = $('sessionSelect');
+    if (!sel) return;
+    S().setActiveSession(sel.value);
+    renderAllSessionUI();
+  }
+
+  function onRoleChange() {
+    renderRoleSummary();
+    renderFrameGallery();
+  }
+
+  function addCapturedFile(file) {
+    var session = ensureSession();
+    syncParamsToSession();
+    var role = $('roleSelect') ? $('roleSelect').value : 'sodium';
+    var k = BP.store.loadK();
+    var kv = k && isFinite(k.value) && k.value > 0 ? k.value : 0.004;
+    BP.ui.loading(true);
+    var analysisPromise = BP.fringe && BP.fringe.analyzeFile
+      ? BP.fringe.analyzeFile(file, { k: kv })
+      : Promise.reject(new Error('条纹识别模块未加载'));
+    return analysisPromise.then(function (r) {
+      return S().addFrame(session.id, {
+        role: role,
+        blob: file,
+        name: file.name,
+        size: file.size,
+        deltaXPx: r.periodPx,
+        deltaXmm: r.deltaXmm,
+        quality: r.visibility,
+        analysis: {
+          axis: r.axis,
+          visibility: r.visibility,
+          periodPxCross: r.periodPxCross
+        }
+      }).then(function (frame) {
+        cam.file = file;
+        showPreview(file,
+          '已加入 ' + (S().ROLE_LABEL[role] || role) +
+          ' · Δx=' + r.periodPx.toFixed(2) + ' px ' +
+          '(' + r.deltaXmm.toFixed(4) + ' mm)');
+        renderAllSessionUI();
+        return frame;
+      });
+    }).catch(function (e) {
+      return S().addFrame(session.id, {
+        role: role,
+        blob: file,
+        name: file.name,
+        size: file.size,
+        analysisError: e.message
+      }).then(function () {
+        showPreview(file, '已保存，但识别失败：' + e.message);
+        renderAllSessionUI();
+      });
+    }).then(function () {
+      BP.ui.loading(false);
+    }, function (e) {
+      BP.ui.loading(false);
+      fail(e);
+    });
+  }
 
   /* ---------------- 相机（① await、② File） ---------------- */
   function openCamera() {
@@ -118,8 +370,7 @@
   function capturePhoto() {
     captureFromVideoToFile('capture-' + Date.now() + '.jpg').then(function (file) {
       cam.file = file;
-      showPreview(file, '已拍摄 ' + Math.round(file.size / 1024) + ' KB · ' + file.name);
-      BP.ui.alert('拍摄成功；P5 接入条纹提取后可直接分析', 'ok');
+      return addCapturedFile(file);
     }).catch(fail);
   }
 
@@ -141,7 +392,7 @@
     var f = ev.target.files && ev.target.files[0];
     if (!f) return;
     cam.file = f;
-    showPreview(f, '已选择 ' + Math.round(f.size / 1024) + ' KB · ' + f.name);
+    addCapturedFile(f);
   }
 
   /* ---------------- 标定（式 24：k = L/N） ---------------- */
@@ -159,6 +410,7 @@
       var v = num('cal_k');
       if (!(v > 0)) throw new Error('k 必须为正数');
       BP.store.saveK(v, { source: 'manual' });
+      syncKToSession(v, { source: 'manual' });
       renderK();
       BP.ui.alert('已保存 k = ' + F.sci(v) + ' mm/px', 'ok');
     } catch (e) { fail(e); }
@@ -168,6 +420,7 @@
     try {
       var r = BP.physics.pixelScale({ L: num('cal_L'), N: num('cal_N') });
       BP.store.saveK(r.k, { L: num('cal_L'), N: num('cal_N'), source: 'L/N' });
+      syncKToSession(r.k, { L: num('cal_L'), N: num('cal_N'), source: 'L/N' });
       renderK();
       BP.ui.result($('calResult'), [
         { label: 'k = L / N', value: F.sci(r.k) + ' mm/px', cls: 'is-key' },
@@ -229,6 +482,7 @@
       var N = dist(ret.pts[0], ret.pts[1]) / ret.scale;
       var r = BP.physics.pixelScale({ L: num('retL'), N: N });
       BP.store.saveK(r.k, { L: num('retL'), N: N, source: '两点标定' });
+      syncKToSession(r.k, { L: num('retL'), N: N, source: '两点标定' });
       renderK();
       BP.ui.result($('retResult'), [
         { label: '两点像素距离 N', value: F.px(N) + ' px' },
@@ -401,14 +655,30 @@
 
   function exportRecord() {
     try {
-      var rec = buildRecord();
-      BP.store.saveRecord(rec);
-      BP.store.exportRecord();
+      syncParamsToSession();
+      var rec = BP.sessions && BP.sessions.listSessions().length
+        ? BP.sessions.exportRecord()
+        : buildRecord();
+      rec.legacy = buildRecord();
+      BP.store.download(
+        'record-' + new Date().toISOString().slice(0, 10) + '.json',
+        JSON.stringify(rec, null, 2),
+        'application/json'
+      );
+      var frameCount = rec.schema === 'bp.record/2'
+        ? (rec.sessions || []).reduce(function (sum, s) {
+            return sum + ((s.frames || []).length);
+          }, 0)
+        : (rec.frames || []).length;
+      var active = activeSession();
+      var kValue = active && active.calibration && isFinite(active.calibration.k_mm_px)
+        ? active.calibration.k_mm_px
+        : (rec.k && rec.k.value);
       show('recordResult', true);
       BP.ui.result($('recordResult'), [
-        { label: '记录已导出', value: 'record-*.json', cls: 'is-key' },
-        { label: '帧数', value: String(rec.frames.length) },
-        { label: 'k', value: rec.k ? F.sci(rec.k.value) : '未标定', cls: rec.k ? '' : 'is-warn' }
+        { label: '记录已导出', value: rec.schema, cls: 'is-key' },
+        { label: '帧数', value: String(frameCount) },
+        { label: 'k', value: isFinite(kValue) ? F.sci(kValue) : '未标定', cls: isFinite(kValue) ? '' : 'is-warn' }
       ]);
     } catch (e) { fail(e); }
   }
@@ -417,6 +687,16 @@
     var f = ev.target.files && ev.target.files[0];
     if (!f) return;
     BP.store.importRecord(f).then(function (rec) {
+      if (rec.schema === 'bp.record/2' && BP.sessions) {
+        BP.sessions.importRecord(rec);
+        renderAllSessionUI();
+        show('recordResult', true);
+        BP.ui.result($('recordResult'), [
+          { label: '已导入记录', value: 'bp.record/2', cls: 'is-key' },
+          { label: '会话数', value: String((rec.sessions || []).length) }
+        ]);
+        return;
+      }
       var dEl = $('param_d'), DEl = $('param_D');
       if (dEl && rec.params && isFinite(rec.params.d)) dEl.value = rec.params.d;
       if (DEl && rec.params && isFinite(rec.params.D)) DEl.value = rec.params.D;
@@ -442,6 +722,25 @@
     BP.ui.alert('条纹提取将在 P5 接入（physics.js 的 fringePeriod 已就绪）', 'info');
   }
 
+  function calcAeff() {
+    try {
+      if (!BP.nbk7) throw new Error('N-BK7 色散模块未加载');
+      var r = BP.nbk7.effectivePrismAngle({
+        deltaXmm: num('aeff_dx'),
+        deltaWmm: num('aeff_dw'),
+        lambdaNm: num('aeff_lambda', 589.3)
+      });
+      BP.ui.result($('aeffResult'), [
+        { label: '最大偏折角 β', value: F.num(r.betaDeg, 5) + '°', cls: 'is-key' },
+        { label: 'N-BK7 n(λ)', value: F.num(r.n, 8) },
+        { label: '等效棱镜角 A_eff', value: F.num(r.aEffDeg, 5) + '°', cls: 'is-key' },
+        { label: '来源', value: '由偏折角反演 · N-BK7 色散 · 非分光计直接测角' },
+        { label: '公式', value: r.formula }
+      ], { caption: 'tan β = -2Δx/Δw' });
+      show('aeffResult', true);
+    } catch (e) { fail(e); }
+  }
+
   /* ---------------- 导出到全局 ---------------- */
   var API = {
     switchTab: switchTab, switchUI: switchUI,
@@ -451,7 +750,8 @@
     addRow: addRow, calcAll: calcAll, exportData: exportData, deleteAllData: deleteAllData,
     addUncInput: addUncInput, calcUncertainty: calcUncertainty,
     addCombineRow: addCombineRow, calcWeightedCombine: calcWeightedCombine, fillReportPaths: fillReportPaths,
-    exportRecord: exportRecord, importRecord: importRecord, analyzeImage: analyzeImage
+    exportRecord: exportRecord, importRecord: importRecord, analyzeImage: analyzeImage,
+    createSessionFromUI: createSessionFromUI, calcAeff: calcAeff
   };
   for (var k2 in API) if (Object.prototype.hasOwnProperty.call(API, k2)) global[k2] = API[k2];
 
@@ -464,6 +764,16 @@
     var cv = $('reticleCanvas');
     if (cv) cv.addEventListener('click', onReticleClick);
     var dv = $('video'); if (dv) dv.muted = true;
+    if (BP.sessions && !BP.sessions.listSessions().length) {
+      BP.sessions.createSession({ method: 'ratio', title: '现场采集' });
+    }
+    renderAllSessionUI();
+    var sessionSelect = $('sessionSelect');
+    if (sessionSelect) sessionSelect.addEventListener('change', onSessionChange);
+    var roleSelect = $('roleSelect');
+    if (roleSelect) roleSelect.addEventListener('change', onRoleChange);
+    var methodSelect = $('methodSelect');
+    if (methodSelect) methodSelect.addEventListener('change', renderRoleOptions);
   }
   if (doc) {
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', init);

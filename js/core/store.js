@@ -135,8 +135,8 @@
       fr.onload = function () {
         try {
           var rec = JSON.parse(String(fr.result));
-          if (!rec || rec.schema !== RECORD_SCHEMA) {
-            throw new Error('不是本平台的记录文件（需要 schema = ' + RECORD_SCHEMA + '）');
+          if (!rec || (rec.schema !== RECORD_SCHEMA && rec.schema !== 'bp.record/2')) {
+            throw new Error('不是本平台的记录文件（需要 schema = ' + RECORD_SCHEMA + ' 或 bp.record/2）');
           }
           resolve(rec);
         } catch (e) { reject(e); }

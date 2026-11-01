@@ -34,14 +34,18 @@
   // 本文件用到的全部 DOM id。tools/check-ids.js 据此静态核对（缺一个就报错），
   // 这一行是"引用了不存在的元素"那类缺陷（报告 P2-5）的唯一防线，改代码时同步维护。
   var IDS = [
-    'imageInput', 'analysisResult',
+    'imageInput', 'analysisResult', 'pcRoleSelect',
     'd_value', 'D_value', 'pixel_size', 'fringe_period_px', 'wavelengthResult',
     'fringe_sodium', 'fringe_laser', 'lambda_laser', 'n_na', 'n_ref', 'ratioResult',
     'unc_d_pc', 'unc_u_d_pc', 'unc_D_pc', 'unc_u_D_pc', 'unc_fringe_pc', 'enhancedUncResultPC',
     'fitTable', 'fitResult', 'fitResiduals', 'fitChartContainer', 'fitChart',
     'uncTable', 'uncertaintyResult',
     'pathTable', 'standard_value', 'compareResult', 'compareTable',
-    'historyList'
+    'historyList', 'pcSessionSummary',
+    'trace_d', 'trace_D', 'trace_k', 'trace_dx', 'trace_a', 'trace_A', 'trace_n',
+    'tracePresetResult', 'traceResult',
+    'aeff_dx_pc', 'aeff_dw_pc', 'aeff_lambda_pc', 'aeffResultPC'
+    , 'mag_dPrime', 'mag_beta', 'mag_dxNa', 'mag_D', 'mag_dxPrime', 'magResult'
   ];
 
   /* ---------------- 页签 ---------------- */
@@ -50,7 +54,7 @@
     BP.ui.$$('.tab-content').forEach(function (t) { t.classList.remove('active'); });
     if (btn) btn.classList.add('active');
     // 读屏器靠 aria-selected 判断当前页签，必须与视觉 active 同步
-    BP.ui.$('.tab').forEach(function (t) { t.setAttribute('aria-selected', t === btn ? 'true' : 'false'); });
+    BP.ui.$$('.tab').forEach(function (t) { t.setAttribute('aria-selected', t === btn ? 'true' : 'false'); });
 
     var panel = $(name);
     if (panel) panel.classList.add('active');
@@ -100,6 +104,139 @@
       BP.store.saveHistory('ratio', { dxNaPx: dxNa, dxRefPx: dxRef, lamRef: lamRef, nNa: nNa, nRef: nRef, lamNm: r.value });
       renderHistory();
     } catch (e) { fail(e); }
+  }
+
+  /* ---------------- 追迹法与 N-BK7 等效棱镜角 ---------------- */
+  function fillTracePreset() {
+    var preset = BP.sessions && BP.sessions.TRACE_PRESET
+      ? BP.sessions.TRACE_PRESET
+      : { d_mm: 0.90213, D_mm: 1000, inputs: { a_mm: 50, A_deg: 1, n: 1.5168 } };
+    setVal('trace_d', preset.d_mm);
+    setVal('trace_D', preset.D_mm);
+    setVal('trace_k', REPORT.k);
+    setVal('trace_dx', REPORT.dxPx);
+    setVal('trace_a', preset.inputs.a_mm);
+    setVal('trace_A', preset.inputs.A_deg);
+    setVal('trace_n', preset.inputs.n);
+    BP.ui.result($('tracePresetResult'), [
+      { label: '来源', value: 'MATLAB 严格追迹', cls: 'is-key' },
+      { label: 'd_trace', value: F.mm(preset.d_mm) + ' mm' },
+      { label: 'd_paraxial', value: F.mm(preset.dParaxial_mm) + ' mm' },
+      { label: '参考报告', value: preset.traceVersion || 'report-table-5.1' },
+      { label: '适用条件', value: 'a=50 mm、A=1.0°、n=1.5168、t≈0.17 mm、λ=589.3 nm' }
+    ], { caption: 'd 不是普适常数；几何参数变化时必须重新追迹' });
+  }
+
+  function checkTraceGeometry() {
+    var preset = BP.sessions && BP.sessions.TRACE_PRESET
+      ? BP.sessions.TRACE_PRESET
+      : { d_mm: 0.90213, D_mm: 1000, inputs: { a_mm: 50, A_deg: 1, n: 1.5168 } };
+    var a = num('trace_a'), angle = num('trace_A'), n = num('trace_n'), D = num('trace_D');
+    var same = Math.abs(a - preset.inputs.a_mm) < 1e-9 &&
+      Math.abs(angle - preset.inputs.A_deg) < 1e-9 &&
+      Math.abs(n - preset.inputs.n) < 1e-6 &&
+      Math.abs(D - preset.D_mm) < 1e-9;
+    BP.ui.result($('tracePresetResult'), [
+      { label: '检查结果', value: same ? '与 MATLAB 基准一致' : '追迹参数已变化', cls: same ? 'is-key' : 'is-warn' },
+      { label: '当前 a / A / n / D', value: F.mm(a) + ' mm / ' + F.num(angle, 4) + '° / ' + F.num(n, 7) + ' / ' + F.num(D, 1) + ' mm' },
+      { label: '基准 d_trace', value: F.mm(preset.d_mm) + ' mm' },
+      { label: '处理建议', value: same ? '可以使用内置 MATLAB 严格追迹基准' : '请重新运行 MATLAB 追迹并导入新的 d_trace，不能继续使用内置值' }
+    ]);
+  }
+
+  function calcAeffPC() {
+    try {
+      if (!BP.nbk7) throw new Error('N-BK7 色散模块未加载');
+      var r = BP.nbk7.effectivePrismAngle({
+        deltaXmm: num('aeff_dx_pc'),
+        deltaWmm: num('aeff_dw_pc'),
+        lambdaNm: num('aeff_lambda_pc', 589.3)
+      });
+      BP.ui.result($('aeffResultPC'), [
+        { label: '最大偏折角 β', value: F.num(r.betaDeg, 5) + '°', cls: 'is-key' },
+        { label: 'N-BK7 n(λ)', value: F.num(r.n, 8) },
+        { label: '等效棱镜角 A_eff', value: F.num(r.aEffDeg, 5) + '°', cls: 'is-key' },
+        { label: '来源', value: '由偏折角反演 · N-BK7 色散 · 非分光计直接测角' },
+        { label: '公式', value: r.formula }
+      ], { caption: 'tan β = -2Δx/Δw' });
+    } catch (e) { fail(e); }
+  }
+
+  function calcTraceMethod() {
+    try {
+      var d = num('trace_d'), D = num('trace_D'), k = num('trace_k'), dx = num('trace_dx');
+      var r = BP.physics.wavelengthBasic({ d: d, D: D, k: k, dxPx: dx });
+      BP.ui.result($('traceResult'), [
+        { label: '追迹法 λ', value: F.lam(r.value), cls: 'is-key' },
+        { label: 'd 来源', value: 'MATLAB 严格追迹基准' },
+        { label: 'd_trace / D', value: F.mm(d) + ' mm / ' + F.num(D, 1) + ' mm' },
+        { label: 'Δx', value: F.px(dx) + ' px × ' + F.sci(k) + ' mm/px' },
+        { label: '公式', value: 'λ = d_trace·Δx·k / D' }
+      ], { caption: 'd 由追迹提供；图像识别只提供 Δx 与 k' });
+      BP.store.saveHistory('trace', { d: d, D: D, k: k, dxPx: dx, lamNm: r.value });
+      renderHistory();
+    } catch (e) { fail(e); }
+  }
+
+  function calcMagnificationMethod() {
+    try {
+      var dPrime = num('mag_dPrime'), beta = num('mag_beta');
+      var dxNa = num('mag_dxNa'), D = num('mag_D'), dxPrime = num('mag_dxPrime');
+      var r = BP.physics.wavelengthMagnification({
+        dPrime: dPrime, beta: beta, dxNaMm: dxNa, D: D, dxPrimeMm: dxPrime
+      });
+      BP.ui.result($('magResult'), [
+        { label: '放大率法 λ', value: F.lam(r.value), cls: 'is-key' },
+        { label: '反算 d = d′/β', value: F.mm(r.dMm) + ' mm' },
+        { label: 'd′ / β', value: F.mm(dPrime) + ' mm / ' + F.num(beta, 4) },
+        { label: 'Δx / Δx′', value: F.mm(dxNa) + ' mm / ' + F.mm(dxPrime) + ' mm' },
+        { label: '公式', value: r.formula }
+      ], { caption: '横向放大率法只读取无透镜与加透镜两组条纹' });
+      BP.store.saveHistory('mag', { dPrime: dPrime, beta: beta, dxNa: dxNa, D: D, dxPrime: dxPrime, lamNm: r.value });
+      renderHistory();
+    } catch (e) { fail(e); }
+  }
+
+  function renderPcSession() {
+    var host = $('pcSessionSummary');
+    if (!host || !BP.sessions) return;
+    var session = BP.sessions.getActiveSession();
+    if (!session) {
+      host.textContent = '暂无测量会话；手机端新建会话后会出现在这里。';
+      renderPcRoleOptions(null);
+      return;
+    }
+    var roles = BP.sessions.requiredRoles(session.method);
+    var rows = [
+      { label: '当前会话', value: session.title || session.id, cls: 'is-key' },
+      { label: '方法', value: session.method },
+      { label: '角色完成度', value: roles.map(function (role) {
+        var s = BP.sessions.roleStats(session.id, role);
+        return s.label + ' ' + s.n + ' 帧';
+      }).join(' · ') }
+    ];
+    if (session.method === 'trace' && session.trace) {
+      rows.push({ label: '追迹来源', value: session.trace.label + ' · d=' + F.mm(session.trace.d_mm) + ' mm' });
+    }
+    BP.ui.result(host, rows, { caption: '测量会话与角色隔离数据' });
+    renderPcRoleOptions(session);
+  }
+
+  function renderPcRoleOptions(session) {
+    var sel = $('pcRoleSelect');
+    if (!sel || !BP.sessions) return;
+    var roles = session
+      ? BP.sessions.requiredRoles(session.method).concat(['calibration'])
+      : ['sodium', 'reference', 'no_lens', 'with_lens', 'calibration'];
+    var previous = sel.value;
+    BP.ui.clear(sel);
+    roles.forEach(function (role) {
+      var option = doc.createElement('option');
+      option.value = role;
+      option.textContent = BP.sessions.ROLE_LABEL[role] || role;
+      sel.appendChild(option);
+    });
+    if (roles.indexOf(previous) >= 0) sel.value = previous;
   }
 
   /* ---------------- 增强不确定度（单路径：u(d)/u(D)/u(Δx) 直接给） ----------------
@@ -339,19 +476,23 @@
     switchTab: switchTab, switchToMobile: switchToMobile,
     analyzeImage: analyzeImage,
     calcWavelength: calcWavelength, calcRatioMethod: calcRatioMethod,
+    fillTracePreset: fillTracePreset, checkTraceGeometry: checkTraceGeometry,
+    calcAeffPC: calcAeffPC, calcTraceMethod: calcTraceMethod,
+    calcMagnificationMethod: calcMagnificationMethod,
     calcUncertaintyPC: calcUncertaintyPC,
     performFitTable: performFitTable, addFitRow: addFitRow, removeFitRow: removeFitRow,
     calcUncertaintyTable: calcUncertaintyTable, addUncRow: addUncRow, removeUncRow: removeUncRow,
     comparePathsTable: comparePathsTable, addPathRow: addPathRow, removePathRow: removePathRow,
     fillReportParams: fillReportParams, fillReportPaths: fillReportPaths,
-    clearHistory: clearHistory, exportHistory: exportHistory, renderHistory: renderHistory
+    clearHistory: clearHistory, exportHistory: exportHistory, renderHistory: renderHistory,
+    renderPcSession: renderPcSession
   };
   for (var k in API) if (Object.prototype.hasOwnProperty.call(API, k)) global[k] = API[k];
 
   if (doc) {
     if (doc.readyState === 'loading') {
-      doc.addEventListener('DOMContentLoaded', function () { bindTabs(); renderHistory(); });
-    } else { bindTabs(); renderHistory(); }
+      doc.addEventListener('DOMContentLoaded', function () { bindTabs(); renderHistory(); renderPcSession(); });
+    } else { bindTabs(); renderHistory(); renderPcSession(); }
   }
 
   BP.pages = BP.pages || {};

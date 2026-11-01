@@ -60,6 +60,30 @@
       ];
       BP.ui.result($('analysisResult'), rows, { caption: '式 (2)(7)：Δx 提取 → λ = d·Δx/D' });
       loadProfilePlot(r.profile, r);
+      if (BP.sessions) {
+        var session = BP.sessions.getActiveSession();
+        if (!session) session = BP.sessions.createSession({ method: 'basic', title: 'PC 图像分析' });
+        var roleEl = $('pcRoleSelect');
+        var role = roleEl && roleEl.value ? roleEl.value : 'sodium';
+        BP.sessions.addFrame(session.id, {
+          role: role,
+          blob: input.files[0],
+          name: input.files[0].name,
+          size: input.files[0].size,
+          deltaXPx: r.periodPx,
+          deltaXmm: r.deltaXmm,
+          quality: r.visibility,
+          analysis: {
+            axis: r.axis,
+            visibility: r.visibility,
+            periodPxCross: r.periodPxCross
+          }
+        }).then(function () {
+          if (BP.pages && BP.pages.pc && BP.pages.pc.renderPcSession) {
+            BP.pages.pc.renderPcSession();
+          }
+        }).catch(fail);
+      }
       BP.store.saveHistory('fringe', { axis: r.axis, periodPx: r.periodPx, deltaXmm: r.deltaXmm, visibility: r.visibility });
       if (BP.pages && BP.pages.pc && BP.pages.pc.renderHistory) BP.pages.pc.renderHistory();
     }).catch(fail).then(function () { BP.ui.loading(false); });
@@ -70,6 +94,42 @@
     var f = ev.target.files && ev.target.files[0];
     if (!f) return;
     BP.store.importRecord(f).then(function (rec) {
+      if (rec.schema === 'bp.record/2' && BP.sessions) {
+        BP.sessions.importRecord(rec);
+        var sessions = rec.sessions || [];
+        var activeId = rec.activeSessionId;
+        var session = sessions.filter(function (s) { return s.id === activeId; })[0] || sessions[0];
+        if (session) BP.sessions.setActiveSession(session.id);
+        var roleRows = session
+          ? BP.sessions.requiredRoles(session.method).map(function (role) {
+              var stat = BP.sessions.roleStats(session.id, role);
+              return { label: stat.label, value: stat.n + ' 帧' + (stat.n ? '，Δx=' + F.px(stat.meanPx) : '') };
+            })
+          : [];
+        var rows = [
+          { label: '记录版本', value: 'bp.record/2', cls: 'is-key' },
+          { label: '会话数', value: String(sessions.length) },
+          { label: '当前会话', value: session ? session.title + '（' + session.method + '）' : '—' }
+        ].concat(roleRows);
+
+        if (session && (session.method === 'basic' || session.method === 'trace')) {
+          var sodium = BP.sessions.roleStats(session.id, 'sodium');
+          var d = session.method === 'trace' && session.trace ? session.trace.d_mm : 0.90213;
+          var D = session.params && isFinite(session.params.D) ? session.params.D : 1000;
+          var k = session.calibration && isFinite(session.calibration.k_mm_px)
+            ? session.calibration.k_mm_px : currentK();
+          if (sodium.n) {
+            var lam = BP.physics.wavelengthBasic({
+              d: d, D: D, dxPx: sodium.meanPx, k: k
+            });
+            rows.push({ label: 'λ 均值', value: F.lam(lam.value), cls: 'is-key' });
+            rows.push({ label: '追迹来源', value: session.trace ? session.trace.label : '基本公式 d' });
+          }
+        }
+        BP.ui.result($('phoneRecordResult'), rows, { caption: '手机会话与角色数据已导入' });
+        if (BP.pages && BP.pages.pc && BP.pages.pc.renderPcSession) BP.pages.pc.renderPcSession();
+        return;
+      }
       var d = rec.params && isFinite(rec.params.d) ? rec.params.d : 0.90213;
       var D = rec.params && isFinite(rec.params.D) ? rec.params.D : 1000;
       var k = rec.k && isFinite(rec.k.value) ? rec.k.value : currentK();

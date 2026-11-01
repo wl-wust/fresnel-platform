@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>双棱镜干涉实验 · 手机端</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2316213e'/%3E%3Cpath d='M6 22 L16 8 L26 22 Z' fill='none' stroke='%2364b5f6' stroke-width='2'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/mobile.css?v=ab01aab">
-<link rel="stylesheet" href="css/app-responsive.css?v=ab01aab">
+<link rel="stylesheet" href="css/mobile.css?v=42df199">
+<link rel="stylesheet" href="css/app-responsive.css?v=42df199">
 </head>
 <body>
 <div class="app-container">
@@ -27,6 +27,24 @@
 
   <!-- ================= 拍照 ================= -->
   <div id="capture" class="tab-page active">
+    <div class="session-panel">
+      <h4>当前测量会话</h4>
+      <div class="session-row">
+        <select id="sessionSelect" aria-label="测量会话"></select>
+        <select id="methodSelect" aria-label="测量方法">
+          <option value="basic">基本公式</option>
+          <option value="ratio" selected>比值法</option>
+          <option value="magnification">横向放大率法</option>
+          <option value="trace">光线追迹法</option>
+        </select>
+      </div>
+      <div class="session-row">
+        <select id="roleSelect" aria-label="图像角色"></select>
+        <button class="btn-save" onclick="createSessionFromUI()">新建会话</button>
+      </div>
+      <div id="roleStatus" class="role-status"></div>
+    </div>
+
     <div class="camera-area">
       <div class="preview-box" id="previewBox" onclick="openCamera()">
         <div class="preview-icon">相机</div>
@@ -56,10 +74,10 @@
     </div>
 
     <div id="captureResult" class="result-box" style="display:none"></div>
-
-    <div class="calibrate-method">
-      <h4>多帧平均</h4>
-      <p class="hint">P5 接入纯前端条纹提取后启用；当前请用 PC 页的"图像分析"。</p>
+    <div class="compare-section">
+      <h4>当前角色多帧</h4>
+      <div id="roleSummary" class="result-box" style="display:none"></div>
+      <div id="frameGallery" class="frame-gallery"></div>
     </div>
   </div>
 
@@ -144,6 +162,16 @@
       <input type="file" id="recordFile" accept=".json,application/json" style="display:none" onchange="importRecord(event)">
       <div id="recordResult" class="result-box" style="display:none"></div>
     </div>
+
+    <div class="compare-section">
+      <h4>N-BK7 等效棱镜角 A_eff</h4>
+      <p class="hint">方案三：由最大偏折角 β 和 N-BK7 色散反演，不得当作分光计直接测角。</p>
+      <div class="param-row"><label for="aeff_dx">棱镜位移 Δx (mm)</label><input type="number" id="aeff_dx" step="0.001"></div>
+      <div class="param-row"><label for="aeff_dw">干涉区宽度变化 Δw (mm)</label><input type="number" id="aeff_dw" step="0.001"></div>
+      <div class="param-row"><label for="aeff_lambda">工作波长 (nm)</label><input type="number" id="aeff_lambda" value="589.3" step="0.1"></div>
+      <button class="btn-calc" onclick="calcAeff()">计算 β 与 A_eff</button>
+      <div id="aeffResult" class="result-box" style="display:none"></div>
+    </div>
   </div>
 
   <!-- ================= 指南 ================= -->
@@ -186,10 +214,13 @@
 
 <div id="bpLoading" class="loading" style="display:none"><div class="spinner"></div><p>处理中...</p></div>
 
-<script src="js/physics.js?v=ab01aab"></script>
-<script src="js/core/fmt.js?v=ab01aab"></script>
-<script src="js/core/ui.js?v=ab01aab"></script>
-<script src="js/core/store.js?v=ab01aab"></script>
-<script src="js/pages/mobile.js?v=ab01aab"></script>
+<script src="js/physics.js?v=42df199"></script>
+<script src="js/core/fmt.js?v=42df199"></script>
+<script src="js/core/ui.js?v=42df199"></script>
+<script src="js/core/store.js?v=42df199"></script>
+<script src="js/core/nbk7.js?v=42df199"></script>
+<script src="js/core/sessions.js?v=42df199"></script>
+<script src="js/core/fringe.js?v=42df199"></script>
+<script src="js/pages/mobile.js?v=42df199"></script>
 </body>
 </html>
