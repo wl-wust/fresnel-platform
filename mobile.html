@@ -99,13 +99,14 @@
     </div>
 
     <div class="calibrate-method">
-      <h4>方法三：分划板两点标定（推荐）</h4>
-      <p class="hint">选一张分划板照片，在图上点两条刻线，再填两刻线的实际间距。</p>
+      <h4>方法三：分划板刻线自动标定（推荐）</h4>
+      <p class="hint">上传照片后自动识别 3 条以上等距刻线，并用相邻刻线间距计算。确认不准时可手点两条刻线兜底；手点只取水平差，不受高度影响。</p>
       <input type="file" id="reticleFile" accept="image/*" style="margin-bottom:8px" onchange="loadReticle(event)">
+      <button class="btn-secondary" onclick="detectReticle()">重新自动识别</button>
       <canvas id="reticleCanvas" width="300" height="200" style="width:100%;max-width:360px;background:#111;border-radius:8px"></canvas>
-      <div class="param-row"><label>已点像素距离</label><span id="retPix">—</span></div>
-      <div class="param-row"><label for="retL">两刻线实际间距 (mm)</label><input type="number" id="retL" value="5" step="0.01"></div>
-      <button class="btn-calc" onclick="calcReticle()">用两点距离算 k</button>
+      <div class="param-row"><label>识别/标定结果</label><span id="retPix">—</span></div>
+      <div class="param-row"><label for="retL">相邻刻线实际间距 (mm)</label><input type="number" id="retL" value="5" step="0.01"></div>
+      <button class="btn-calc" onclick="calcReticle()">计算并保存 k</button>
     </div>
 
     <div id="calResult" class="result-box"></div>
@@ -198,8 +199,9 @@
     <div class="guide-card">
       <h4>标定步骤</h4>
       <ol>
-        <li>拍分划板（能看清两条刻线）</li>
-        <li>在图上点两条刻线，填实际间距 L</li>
+        <li>拍分划板（尽量正对、刻线竖直、数字和刻线清晰）</li>
+        <li>等待自动识别，确认绿线落在刻线上</li>
+        <li>填相邻刻线的实际间距 L；识别不准时再手点两条刻线</li>
         <li>k = L / N（式 24），标定后不得变焦</li>
       </ol>
     </div>

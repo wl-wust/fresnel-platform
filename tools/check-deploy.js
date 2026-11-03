@@ -80,6 +80,7 @@ const PAIRS = [
   ['tools/check-ids.js',     'tools/check-ids.js'],
   ['tools/check-p1-html.js', 'tools/check-p1-html.js'],
   ['tools/check-p2-html.js', 'tools/check-p2-html.js'],
+  ['tools/check-reticle.js', 'tools/check-reticle.js'],
   ['tools/check-deploy.js',  'tools/check-deploy.js']
 ];
 

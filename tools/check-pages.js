@@ -87,6 +87,17 @@ if (fs.existsSync(idxPath)) {
 } else {
   check('存在 index.html', false);
 }
+// 手机端分划板标定：自动刻线优先，手点兜底
+const mobilePath = path.join(REPO, 'mobile.html');
+if (fs.existsSync(mobilePath)) {
+  const mobile = fs.readFileSync(mobilePath, 'utf8');
+  check('手机端标定页使用自动刻线识别',
+        /分划板刻线自动标定/.test(mobile) && /onclick="detectReticle\(\)"/.test(mobile));
+  check('手机端保留手点兜底说明',
+        /手点两条刻线兜底/.test(mobile) && /不受高度影响/.test(mobile));
+} else {
+  check('存在 mobile.html', false);
+}
 // P6b 接线：页签 ARIA 状态 + 光学页 DPR 模块
 for (const [page, btnClass] of [['index.html', 'tab'], ['mobile.html', 'tab-btn']]) {
   const fp = path.join(REPO, page);

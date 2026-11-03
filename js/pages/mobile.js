@@ -32,7 +32,10 @@
   var COMMON_REL_U = 6.4e-6;
 
   var cam = { stream: null, file: null };
-  var ret = { img: null, scale: 1, pts: [] };
+  var ret = {
+    img: null, scale: 1, pts: [], lines: [], spacingPx: 0,
+    analysisScale: 1, detection: null
+  };
   var METHOD_LABEL = {
     basic: '基本公式',
     ratio: '比值法',
@@ -442,21 +445,338 @@
 
   function clearK() { BP.store.clearK(); renderK(); BP.ui.alert('已清除标定', 'info'); }
 
-  /* 两点标定：在分划板照片上点两条刻线 */
+  /* ---------------- 分划板标定 ----------------
+   * 自动识别优先利用多条等距竖线；手点仅作兜底，并只取水平差，避免高度差污染 N。
+   */
+  function reticlePercentile(gray, sampleStep) {
+    var hist = new Uint32Array(256), total = 0, i, v;
+    for (i = 0; i < gray.length; i += sampleStep) {
+      v = gray[i];
+      v = v < 0 ? 0 : (v > 255 ? 255 : Math.round(v));
+      hist[v]++; total++;
+    }
+    function at(q) {
+      var want = Math.max(1, Math.round(total * q)), acc = 0;
+      for (var k = 0; k < hist.length; k++) {
+        acc += hist[k];
+        if (acc >= want) return k;
+      }
+      return 255;
+    }
+    return { p40: at(0.40), p95: at(0.95), at: at };
+  }
+
+  function reticlePeakAt(profile, x, radius) {
+    var from = Math.max(0, x - radius), to = Math.min(profile.length - 1, x + radius);
+    for (var i = from; i <= to; i++) {
+      if (i !== x && profile[i] > profile[x] + 1e-9) return false;
+      if (i < x && profile[i] === profile[x]) return false;
+    }
+    return true;
+  }
+
+  function reticleMedian(values) {
+    if (!values.length) return 0;
+    var a = values.slice().sort(function (x, y) { return x - y; });
+    var m = Math.floor(a.length / 2);
+    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+  }
+
+  /* 纯函数：RGBA 图像 → 分划板刻线坐标（分析图坐标）。
+   * 先做水平局部背景残差，保留窄暗竖线；再找等间距峰值序列，抑制宽干涉条纹。
+   */
+  function detectReticleLines(data, width, height, opts) {
+    opts = opts || {};
+    if (!data || !(width > 20) || !(height > 20) || data.length < width * height * 4) {
+      return { lines: [], spacingPx: NaN, count: 0, error: '图像数据无效' };
+    }
+
+    var n = width * height;
+    var gray = new Float32Array(n);
+    var i, x, y, p;
+    for (i = 0; i < n; i++) {
+      p = i * 4;
+      gray[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+    }
+
+    // 用亮度分布圈出有效视场，避免把四周纯黑背景算进刻线评分。
+    var pct = reticlePercentile(gray, Math.max(1, Math.floor(n / 50000)));
+    var fieldThreshold = pct.p40 + 0.35 * Math.max(1, pct.p95 - pct.p40);
+    var rowCount = new Uint32Array(height), colCount = new Uint32Array(width);
+    for (y = 0; y < height; y++) {
+      for (x = 0; x < width; x++) {
+        if (gray[y * width + x] > fieldThreshold) {
+          rowCount[y]++;
+          colCount[x]++;
+        }
+      }
+    }
+    function bounds(counts, minCount) {
+      var first = -1, last = -1;
+      for (var q = 0; q < counts.length; q++) {
+        if (counts[q] >= minCount) {
+          if (first < 0) first = q;
+          last = q;
+        }
+      }
+      return first < 0 ? null : { start: first, end: last };
+    }
+    var rb = bounds(rowCount, Math.max(6, width * 0.08));
+    var cb = bounds(colCount, Math.max(6, height * 0.08));
+    var fx0 = cb ? cb.start : Math.round(width * 0.05);
+    var fx1 = cb ? cb.end : Math.round(width * 0.95);
+    var fy0 = rb ? rb.start : Math.round(height * 0.08);
+    var fy1 = rb ? rb.end : Math.round(height * 0.62);
+    var fieldH = Math.max(1, fy1 - fy0);
+    var y0 = Math.max(1, Math.round(fy0 + fieldH * 0.08));
+    var y1 = Math.min(height - 2, Math.round(fy0 + fieldH * 0.58));
+    var x0 = Math.max(2, fx0);
+    var x1 = Math.min(width - 3, fx1);
+    if (y1 - y0 < 30 || x1 - x0 < 60) {
+      return { lines: [], spacingPx: NaN, count: 0, error: '有效视场过小' };
+    }
+
+    var radius = Math.max(6, Math.min(20, Math.round(width * 0.012)));
+    var yStep = Math.max(1, Math.round(height / 700));
+    var rowIds = [];
+    for (y = y0; y <= y1; y += yStep) rowIds.push(y);
+    var rows = rowIds.length;
+    var residual = new Float32Array(width * rows);
+    var prefix = new Float32Array(width + 1);
+    var rowDark = new Float32Array(width);
+
+    for (var ri = 0; ri < rows; ri++) {
+      y = rowIds[ri];
+      var base = y * width;
+      rowDark.fill(0);
+      prefix[0] = 0;
+      for (x = 0; x < width; x++) prefix[x + 1] = prefix[x] + gray[base + x];
+      for (x = x0; x <= x1; x++) {
+        var left = Math.max(0, x - radius), right = Math.min(width - 1, x + radius);
+        var localMean = (prefix[right + 1] - prefix[left]) / (right - left + 1);
+        var dark = localMean - gray[base + x];
+        rowDark[x] = dark > 0 ? dark : 0;
+      }
+      // 轻微倾斜的刻线在相邻列也保留响应，提升手机拍摄容错。
+      for (x = x0; x <= x1; x++) {
+        var q = ri * width + x;
+        var ql = x > 0 ? rowDark[x - 1] : 0;
+        var qr = x + 1 < width ? rowDark[x + 1] : 0;
+        residual[q] = Math.max(rowDark[x], ql, qr);
+      }
+    }
+
+    var profile = new Float32Array(width);
+    var meanProfile = new Float32Array(width);
+    for (x = x0; x <= x1; x++) {
+      var maxAtX = 0, rr;
+      for (rr = 0; rr < rows; rr++) maxAtX = Math.max(maxAtX, residual[rr * width + x]);
+      var runThreshold = Math.max(0.75, maxAtX * 0.22);
+      var bestLen = 0, curLen = 0, bestSum = 0, curSum = 0;
+      for (rr = 0; rr < rows; rr++) {
+        var valAt = residual[rr * width + x];
+        if (valAt >= runThreshold) {
+          curLen++; curSum += valAt;
+          if (curLen > bestLen) { bestLen = curLen; bestSum = curSum; }
+        } else {
+          curLen = 0; curSum = 0;
+        }
+      }
+      if (bestLen) {
+        meanProfile[x] = bestSum / bestLen;
+        profile[x] = meanProfile[x] * Math.sqrt(bestLen);
+      }
+    }
+    var smooth = new Float32Array(width);
+    var smoothRadius = 3;
+    for (x = x0; x <= x1; x++) {
+      var sum = 0, cnt = 0;
+      for (var sx = Math.max(x0, x - smoothRadius); sx <= Math.min(x1, x + smoothRadius); sx++) {
+        sum += profile[sx]; cnt++;
+      }
+      smooth[x] = sum / cnt;
+    }
+    profile = smooth;
+
+    var maxProfile = 0, maxMean = 0;
+    for (x = x0; x <= x1; x++) {
+      maxProfile = Math.max(maxProfile, profile[x]);
+      maxMean = Math.max(maxMean, meanProfile[x]);
+    }
+    if (maxMean < 3.5) return { lines: [], spacingPx: NaN, count: 0, error: '刻线对比度不足' };
+
+    var peakRadius = Math.max(2, Math.round(width * 0.005));
+    var promRadius = Math.max(10, Math.round(width * 0.04));
+    var minProm = Math.max(0.25, maxProfile * 0.025);
+    var minScore = Math.max(0.75, maxProfile * 0.20);
+    var peaks = [];
+    for (x = x0 + peakRadius; x <= x1 - peakRadius; x++) {
+      if (profile[x] < minScore || !reticlePeakAt(profile, x, peakRadius)) continue;
+      var lo = Math.max(x0, x - promRadius), hi = Math.min(x1, x + promRadius);
+      var localMin = profile[x];
+      for (var px = lo; px <= hi; px++) localMin = Math.min(localMin, profile[px]);
+      var prom = profile[x] - localMin;
+      if (prom >= minProm) peaks.push({ x: x, score: profile[x], prom: prom });
+    }
+    if (peaks.length < 3) {
+      return {
+        lines: [], spacingPx: NaN, count: 0, error: '候选刻线不足',
+        debug: { maxProfile: maxProfile, peakCount: peaks.length, y0: y0, y1: y1,
+                 x0: x0, x1: x1, fieldThreshold: fieldThreshold,
+                 peaks: peaks.slice(0, 20).map(function (q4) { return q4.x; }) }
+      };
+    }
+    var minS = Math.max(12, width * 0.045);
+    var maxS = width * 0.28;
+    var best = null;
+    var maxLines = 8;
+    function consider(a, b, gap) {
+      if (!(b.x > a.x)) return;
+      var S = (b.x - a.x) / gap;
+      if (!(S >= minS && S <= maxS)) return;
+      var tol = Math.max(2.5, S * 0.04);
+      var assigned = [];
+      for (var k = -8; k <= 8; k++) {
+        var want = a.x + k * S;
+        if (want < x0 || want > x1) continue;
+        var nearest = null, nearestErr = Infinity;
+        for (var j = 0; j < peaks.length; j++) {
+          var e = Math.abs(peaks[j].x - want);
+          if (e < nearestErr) { nearestErr = e; nearest = peaks[j]; }
+        }
+        if (nearest && nearestErr <= tol) {
+          assigned.push({ line: nearest, idx: k, err: nearestErr });
+        }
+      }
+      if (assigned.length < 3 || assigned.length > maxLines) return;
+      assigned.sort(function (u, v) { return u.idx - v.idx; });
+      var qsum = 0, errsum = 0;
+      assigned.forEach(function (a1) {
+        qsum += Math.pow(a1.line.score, 1.5);
+        errsum += a1.err;
+      });
+      var score = qsum * (1 + 0.12 * (assigned.length - 3)) - errsum * 0.35;
+      if (!best || score > best.score) best = { score: score, step: S, assigned: assigned };
+    }
+    for (i = 0; i < peaks.length; i++) {
+      for (var j2 = i + 1; j2 < peaks.length; j2++) {
+        for (var gap = 1; gap <= 4; gap++) consider(peaks[i], peaks[j2], gap);
+      }
+    }
+    if (!best) return { lines: [], spacingPx: NaN, count: 0, error: '未找到等距刻线' };
+
+    // 对命中的刻线做线性拟合，缺失一条时仍能得到单格间距。
+    var assigned = best.assigned;
+    var meanK = 0, meanX = 0;
+    assigned.forEach(function (q1) { meanK += q1.idx; meanX += q1.line.x; });
+    meanK /= assigned.length; meanX /= assigned.length;
+    var num = 0, den = 0;
+    assigned.forEach(function (q2) {
+      num += (q2.idx - meanK) * (q2.line.x - meanX);
+      den += (q2.idx - meanK) * (q2.idx - meanK);
+    });
+    var step = den > 0 ? num / den : best.step;
+    var rms = 0;
+    var lines = assigned.map(function (q3) {
+      var err = q3.line.x - (meanX + step * (q3.idx - meanK));
+      rms += err * err;
+      return q3.line.x;
+    });
+    rms = Math.sqrt(rms / lines.length);
+    var consistency = rms / Math.max(1, step);
+    if (consistency > 0.035) {
+      return { lines: [], spacingPx: NaN, count: 0, error: '刻线间距一致性不足' };
+    }
+    return {
+      lines: lines,
+      spacingPx: step,
+      count: lines.length,
+      scores: assigned.map(function (q6) { return q6.line.score; }),
+      consistency: consistency,
+      score: best.score,
+      y0: y0,
+      y1: y1,
+      width: width,
+      height: height
+    };
+  }
+
+  function manualReticlePixels(a, b, scale) {
+    scale = scale > 0 ? scale : 1;
+    return Math.abs(a.x - b.x) / scale;
+  }
+
+  function drawReticle() {
+    var cv = $('reticleCanvas');
+    if (!cv || !ret.img) return;
+    var ctx = cv.getContext('2d');
+    ctx.drawImage(ret.img, 0, 0, cv.width, cv.height);
+    if (ret.lines.length >= 3 && ret.detection) {
+      var y0 = ret.detection.y0 / ret.analysisScale * ret.scale;
+      var y1 = ret.detection.y1 / ret.analysisScale * ret.scale;
+      ret.lines.forEach(function (x, i) {
+        var dx = x * ret.scale;
+        ctx.strokeStyle = 'rgba(0,255,136,0.95)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(dx, y0); ctx.lineTo(dx, y1); ctx.stroke();
+        ctx.fillStyle = '#00ff88';
+        ctx.fillText(String(i + 1), dx + 3, Math.max(12, y0 - 4));
+      });
+    }
+    ret.pts.forEach(function (p, i) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? '#ffd93d' : '#00d4ff'; ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.fillText(String(i + 1), p.x + 6, p.y - 6);
+    });
+    if (ret.pts.length === 2) {
+      ctx.strokeStyle = '#00ff88'; ctx.beginPath();
+      ctx.moveTo(ret.pts[0].x, ret.pts[0].y); ctx.lineTo(ret.pts[1].x, ret.pts[1].y); ctx.stroke();
+    }
+  }
+
+  function detectReticle() {
+    if (!ret.img) { BP.ui.alert('请先选择分划板照片'); return; }
+    try {
+      var maxW = 1080, s = Math.min(1, maxW / ret.img.width);
+      var c = doc.createElement('canvas');
+      c.width = Math.round(ret.img.width * s);
+      c.height = Math.round(ret.img.height * s);
+      var ctx = c.getContext('2d');
+      ctx.drawImage(ret.img, 0, 0, c.width, c.height);
+      var imageData = ctx.getImageData(0, 0, c.width, c.height);
+      var r = detectReticleLines(imageData.data, c.width, c.height);
+      if (!r || r.count < 3) throw new Error((r && r.error) || '自动识别失败');
+      ret.analysisScale = s;
+      ret.detection = r;
+      ret.lines = r.lines.map(function (x) { return x / s; });
+      ret.spacingPx = r.spacingPx / s;
+      ret.pts = [];
+      drawReticle();
+      setText('retPix', '自动识别 ' + r.count + ' 条 · 相邻 ' + ret.spacingPx.toFixed(1) + ' px');
+      BP.ui.alert('已识别 ' + r.count + ' 条等距刻线，请确认绿线位置', 'ok');
+    } catch (e) {
+      ret.lines = []; ret.spacingPx = 0; ret.detection = null;
+      drawReticle();
+      setText('retPix', '自动识别失败：' + e.message);
+      BP.ui.alert(e.message + '，可在图上点两条刻线兜底', 'error');
+    }
+  }
+
+  /* 读取分划板照片并优先自动识别刻线 */
   function loadReticle(ev) {
     var f = ev.target.files && ev.target.files[0];
     if (!f) return;
     var img = new global.Image();
     img.onload = function () {
-      ret.img = img; ret.pts = [];
+      ret.img = img; ret.pts = []; ret.lines = []; ret.spacingPx = 0; ret.detection = null;
       var cv = $('reticleCanvas');
       var maxW = 360, s = Math.min(1, maxW / img.width);
       ret.scale = s;
       cv.width = Math.round(img.width * s);
       cv.height = Math.round(img.height * s);
-      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-      setText('retPix', '—');
-      BP.ui.alert('请在图上点两条刻线', 'info');
+      drawReticle();
+      setText('retPix', '正在自动识别刻线…');
+      global.setTimeout(detectReticle, 0);
     };
     img.onerror = function () { BP.ui.alert('图片读取失败'); };
     img.src = global.URL.createObjectURL(f);
@@ -468,35 +788,39 @@
     var x = (ev.clientX - r.left) * cv.width / r.width;
     var y = (ev.clientY - r.top) * cv.height / r.height;
     if (ret.pts.length >= 2) ret.pts = [];
+    if (!ret.pts.length) {
+      ret.lines = []; ret.spacingPx = 0; ret.detection = null;
+    }
     ret.pts.push({ x: x, y: y });
-    var ctx = cv.getContext('2d');
-    ctx.drawImage(ret.img, 0, 0, cv.width, cv.height);
-    ret.pts.forEach(function (p, i) {
-      ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = i === 0 ? '#ffd93d' : '#00d4ff'; ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.fillText(String(i + 1), p.x + 6, p.y - 6);
-    });
+    drawReticle();
     if (ret.pts.length === 2) {
-      ctx.strokeStyle = '#00ff88'; ctx.beginPath();
-      ctx.moveTo(ret.pts[0].x, ret.pts[0].y); ctx.lineTo(ret.pts[1].x, ret.pts[1].y); ctx.stroke();
-      var dImg = dist(ret.pts[0], ret.pts[1]) / ret.scale;
-      setText('retPix', dImg.toFixed(1) + ' px（图像原始像素）');
+      var dImg = manualReticlePixels(ret.pts[0], ret.pts[1], ret.scale);
+      setText('retPix', dImg.toFixed(1) + ' px（水平差，图像原始像素）');
     }
   }
 
-  function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
-
   function calcReticle() {
     try {
-      if (ret.pts.length !== 2) throw new Error('请先在图上点两条刻线');
-      var N = dist(ret.pts[0], ret.pts[1]) / ret.scale;
+      var N, source, nLabel;
+      if (ret.lines.length >= 3 && ret.spacingPx > 0) {
+        N = ret.spacingPx;
+        source = '自动刻线标定';
+        nLabel = '相邻刻线间距 N';
+      } else if (ret.pts.length === 2) {
+        N = manualReticlePixels(ret.pts[0], ret.pts[1], ret.scale);
+        source = '两点水平标定';
+        nLabel = '两点水平像素差 N';
+      } else {
+        throw new Error('请等待自动识别，或手点两条刻线');
+      }
       var r = BP.physics.pixelScale({ L: num('retL'), N: N });
-      BP.store.saveK(r.k, { L: num('retL'), N: N, source: '两点标定' });
-      syncKToSession(r.k, { L: num('retL'), N: N, source: '两点标定' });
+      BP.store.saveK(r.k, { L: num('retL'), N: N, source: source });
+      syncKToSession(r.k, { L: num('retL'), N: N, source: source });
       renderK();
       BP.ui.result($('retResult'), [
-        { label: '两点像素距离 N', value: F.px(N) + ' px' },
-        { label: '实际间距 L', value: F.mm(num('retL')) + ' mm' },
+        { label: nLabel, value: F.px(N) + ' px' },
+        { label: '相邻刻线实际间距 L', value: F.mm(num('retL')) + ' mm' },
+        { label: '标定方式', value: source },
         { label: 'k = L / N', value: F.sci(r.k) + ' mm/px', cls: 'is-key' }
       ]);
       show('retResult', true);
@@ -756,7 +1080,8 @@
     switchTab: switchTab, switchUI: switchUI,
     openCamera: openCamera, stopCamera: stopCamera, capturePhoto: capturePhoto, handleFile: handleFile,
     saveK: saveK, calcK: calcK, clearK: clearK,
-    loadReticle: loadReticle, calcReticle: calcReticle, onReticleClick: onReticleClick,
+    loadReticle: loadReticle, detectReticle: detectReticle, calcReticle: calcReticle, onReticleClick: onReticleClick,
+    detectReticleLines: detectReticleLines, manualReticlePixels: manualReticlePixels,
     addRow: addRow, calcAll: calcAll, exportData: exportData, deleteAllData: deleteAllData,
     addUncInput: addUncInput, calcUncertainty: calcUncertainty,
     addCombineRow: addCombineRow, calcWeightedCombine: calcWeightedCombine, fillReportPaths: fillReportPaths,
