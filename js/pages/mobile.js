@@ -293,14 +293,24 @@
         analysis: {
           axis: r.axis,
           visibility: r.visibility,
-          periodPxCross: r.periodPxCross
+          periodPxCross: r.periodPxCross,
+          stripeAngleDeg: r.stripeAngleDeg,
+          roi: r.roi,
+          signal: r.signal,
+          spectralSnr: r.spectralSnr,
+          acfPeak: r.acfPeak
         }
       }).then(function (frame) {
         cam.file = file;
+        var dev = r.axis === 'x'
+          ? Math.abs(r.stripeAngleDeg - 90)
+          : (r.axis === 'y' ? Math.min(r.stripeAngleDeg, 180 - r.stripeAngleDeg) : NaN);
         showPreview(file,
           '已加入 ' + (S().ROLE_LABEL[role] || role) +
           ' · Δx=' + r.periodPx.toFixed(2) + ' px ' +
-          '(' + r.deltaXmm.toFixed(4) + ' mm)');
+          '(' + r.deltaXmm.toFixed(4) + ' mm)' +
+          ' · ' + (r.axis === 'oblique' ? '斜条纹 ' + r.stripeAngleDeg.toFixed(1) + '°'
+                                          : '倾角 ' + dev.toFixed(1) + '°'));
         renderAllSessionUI();
         return frame;
       });

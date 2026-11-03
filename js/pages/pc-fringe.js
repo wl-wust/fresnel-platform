@@ -41,6 +41,13 @@
     });
   }
 
+  function stripeDirectionLabel(r) {
+    var a = ((r.stripeAngleDeg || 0) % 180 + 180) % 180;
+    if (r.axis === 'x') return '竖直条纹，偏离竖轴 ' + Math.abs(a - 90).toFixed(1) + '°';
+    if (r.axis === 'y') return '水平条纹，偏离横轴 ' + Math.min(a, 180 - a).toFixed(1) + '°';
+    return '斜条纹，' + a.toFixed(1) + '°';
+  }
+
   /* ---------------- ① 选图 → 提取 ---------------- */
   function analyzeImage() {
     var input = $('imageInput');
@@ -54,7 +61,9 @@
         { label: '零交叉法交叉检查', value: F.px(r.periodPxCross) + ' px',
           note: '两种算法相差 ' + (isFinite(r.periodPxCross) ? (Math.abs(r.periodPx - r.periodPxCross) / r.periodPx * 100).toFixed(2) : '—') + '%' },
         { label: '可见度 V', value: isFinite(r.visibility) ? (r.visibility * 100).toFixed(1) + '%' : '—' },
-        { label: '投影方向', value: r.axis === 'x' ? '竖直条纹（按列平均）' : '水平条纹（按行平均）' },
+        { label: '条纹方向', value: stripeDirectionLabel(r) },
+        { label: '识别通道 / 中央 ROI', value: r.signal + ' 通道 · ' + r.roi.width + ' × ' + r.roi.height + ' px' },
+        { label: '自相关 / 频谱信噪比', value: (r.acfPeak * 100).toFixed(1) + '% / ' + r.spectralSnr.toFixed(1) },
         { label: '像素当量 k', value: F.sci(k) + ' mm/px' + (r.scale && r.scale !== 1 ? '（图已缩 ' + r.scale.toFixed(2) + '×，已折算）' : '') },
         { label: '原图尺寸', value: r.sourceSize.width + ' × ' + r.sourceSize.height + ' px' }
       ];
@@ -76,7 +85,12 @@
           analysis: {
             axis: r.axis,
             visibility: r.visibility,
-            periodPxCross: r.periodPxCross
+            periodPxCross: r.periodPxCross,
+            stripeAngleDeg: r.stripeAngleDeg,
+            roi: r.roi,
+            signal: r.signal,
+            spectralSnr: r.spectralSnr,
+            acfPeak: r.acfPeak
           }
         }).then(function () {
           if (BP.pages && BP.pages.pc && BP.pages.pc.renderPcSession) {

@@ -76,6 +76,212 @@
     return cols;
   }
 
+  /* ---------------- 真实照片：信号、ROI 与方向投影 ----------------
+   * 钠黄光在 R/G 通道最亮，蓝色反光在 B 通道更明显。这里不再把整图直接
+   * 投影成一条线，而是：
+   *   ① 用 max(R,G) 压制蓝斑；
+   *   ② 用 Otsu 阈值找发光圆视场，排除大面积黑背景；
+   *   ③ 在中心 ROI 内扫描投影方向，避免条纹倾斜把频谱峰抹平。
+   */
+  function signalFromImageData(data, width, height) {
+    var n = width * height, out = new Float32Array(n);
+    for (var i = 0, p = 0; i < n; i++, p += 4) {
+      var r = data[p], g = data[p + 1];
+      out[i] = r > g ? r : g;
+    }
+    return out;
+  }
+
+  function otsuThreshold(signal) {
+    var hist = new Uint32Array(256), total = signal.length, i;
+    for (i = 0; i < total; i++) {
+      var v = Math.max(0, Math.min(255, Math.round(signal[i])));
+      hist[v]++;
+    }
+    var sum = 0;
+    for (i = 0; i < 256; i++) sum += i * hist[i];
+    var sumB = 0, wB = 0, best = -1, threshold = 0;
+    for (i = 0; i < 256; i++) {
+      wB += hist[i];
+      if (!wB) continue;
+      var wF = total - wB;
+      if (!wF) break;
+      sumB += i * hist[i];
+      var mB = sumB / wB, mF = (sum - sumB) / wF;
+      var between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > best) { best = between; threshold = i; }
+    }
+    return threshold;
+  }
+
+  function activeBounds(signal, width, height, threshold) {
+    var xCount = new Uint32Array(width), yCount = new Uint32Array(height);
+    var xMax = 0, yMax = 0, total = 0, x, y;
+    for (y = 0; y < height; y++) {
+      for (x = 0; x < width; x++) {
+        if (signal[y * width + x] > threshold) {
+          xCount[x]++; yCount[y]++; total++;
+        }
+      }
+    }
+    if (!total) return null;
+    for (x = 0; x < width; x++) if (xCount[x] > xMax) xMax = xCount[x];
+    for (y = 0; y < height; y++) if (yCount[y] > yMax) yMax = yCount[y];
+    var xNeed = Math.max(1, Math.floor(xMax * 0.01));
+    var yNeed = Math.max(1, Math.floor(yMax * 0.01));
+    var x0 = 0, x1 = width - 1, y0 = 0, y1 = height - 1;
+    while (x0 < x1 && xCount[x0] < xNeed) x0++;
+    while (x1 > x0 && xCount[x1] < xNeed) x1--;
+    while (y0 < y1 && yCount[y0] < yNeed) y0++;
+    while (y1 > y0 && yCount[y1] < yNeed) y1--;
+    return { x0: x0, y0: y0, x1: x1, y1: y1 };
+  }
+
+  function centerRoi(signal, width, height) {
+    var threshold = otsuThreshold(signal);
+    var bounds = activeBounds(signal, width, height, Math.max(4, threshold));
+    if (!bounds) throw new Error('图像中没有明显发光区域');
+    var bw = bounds.x1 - bounds.x0 + 1, bh = bounds.y1 - bounds.y0 + 1;
+    var x0, y0, rw, rh;
+    if (bw >= width * 0.9 && bh >= height * 0.9) {
+      rw = width * 0.96; rh = height * 0.96;
+    } else {
+      rw = bw * 0.78; rh = bh * 0.78;
+    }
+    var cx = (bounds.x0 + bounds.x1) / 2, cy = (bounds.y0 + bounds.y1) / 2;
+    x0 = Math.max(0, Math.round(cx - rw / 2));
+    y0 = Math.max(0, Math.round(cy - rh / 2));
+    var x1 = Math.min(width, Math.round(cx + rw / 2));
+    var y1 = Math.min(height, Math.round(cy + rh / 2));
+    if (x1 - x0 < 32 || y1 - y0 < 32) throw new Error('有效条纹区域太小');
+    return { x: x0, y: y0, width: x1 - x0, height: y1 - y0, threshold: threshold };
+  }
+
+  function sampleRoi(signal, imageWidth, roi, stride) {
+    var cx = roi.x + roi.width / 2, cy = roi.y + roi.height / 2;
+    var xs = [], ys = [], vs = [];
+    for (var y = roi.y; y < roi.y + roi.height; y += stride) {
+      for (var x = roi.x; x < roi.x + roi.width; x += stride) {
+        xs.push(x - cx); ys.push(y - cy); vs.push(signal[y * imageWidth + x]);
+      }
+    }
+    return { xs: xs, ys: ys, vs: vs, stride: stride };
+  }
+
+  function projectSamples(samples, angle) {
+    var c = Math.cos(angle), s = Math.sin(angle), i;
+    var minT = Infinity, maxT = -Infinity;
+    for (i = 0; i < samples.xs.length; i++) {
+      var t = samples.xs[i] * c + samples.ys[i] * s;
+      if (t < minT) minT = t;
+      if (t > maxT) maxT = t;
+    }
+    var bins = Math.max(48, Math.min(2400, Math.round(maxT - minT)));
+    var sums = new Float64Array(bins), counts = new Uint32Array(bins);
+    var span = maxT - minT || 1;
+    for (i = 0; i < samples.xs.length; i++) {
+      var tt = samples.xs[i] * c + samples.ys[i] * s;
+      var b = Math.max(0, Math.min(bins - 1, Math.floor((tt - minT) / span * bins)));
+      sums[b] += samples.vs[i]; counts[b]++;
+    }
+    // 扫描方向接近 0°/90° 时，隔点采样会留下空箱；
+    // 空箱按相邻有效投影值线性补齐，不能当作零亮度，否则会产生虚假短周期。
+    var filled = new Float64Array(bins), nextValid = new Int32Array(bins), next = -1;
+    for (i = 0; i < bins; i++) {
+      if (counts[i]) { filled[i] = sums[i] / counts[i]; next = i; }
+    }
+    next = -1;
+    for (i = bins - 1; i >= 0; i--) {
+      if (counts[i]) next = i;
+      nextValid[i] = next;
+    }
+    var prev = -1, prevValue = 0;
+    for (i = 0; i < bins; i++) {
+      if (counts[i]) {
+        prev = i; prevValue = filled[i];
+      } else if (prev >= 0 && nextValid[i] >= 0) {
+        var t0 = prev, t1 = nextValid[i];
+        filled[i] = prevValue + (filled[t1] - prevValue) * (i - t0) / (t1 - t0);
+      } else if (nextValid[i] >= 0) {
+        filled[i] = filled[nextValid[i]];
+      } else {
+        filled[i] = prevValue;
+      }
+    }
+    var first = 0, last = bins - 1;
+    while (first < last && !counts[first]) first++;
+    while (last > first && !counts[last]) last--;
+    var trim = Math.floor((last - first + 1) * 0.03);
+    first += trim; last -= trim;
+    var profile = [];
+    for (i = first; i <= last; i++) {
+      profile.push(filled[i]);
+    }
+    return profile;
+  }
+
+  function angleDistance(a, b) {
+    var d = Math.abs(a - b) % 180;
+    return d > 90 ? 180 - d : d;
+  }
+
+  // 用中心区域的亮度梯度估计条纹法线。条纹方向扫描只在此角度附近细化，
+  // 可避免规则条纹在斜向投影、插值时产生周期更短但虚假的高分峰。
+  function gradientOrientation(signal, width, roi) {
+    var stride = Math.max(1, Math.floor(Math.max(roi.width, roi.height) / 500));
+    var x0 = roi.x + Math.floor(roi.width * 0.1), x1 = roi.x + Math.ceil(roi.width * 0.9);
+    var y0 = roi.y + Math.floor(roi.height * 0.1), y1 = roi.y + Math.ceil(roi.height * 0.9);
+    var xx = 0, yy = 0, xy = 0, count = 0;
+    for (var y = y0; y < y1; y += stride) {
+      for (var x = x0; x < x1; x += stride) {
+        var p = y * width + x;
+        if (signal[p] < Math.max(8, roi.threshold * 0.6)) continue;
+        var dx = signal[p + 1] - signal[p - 1];
+        var dy = signal[p + width] - signal[p - width];
+        xx += dx * dx; yy += dy * dy; xy += dx * dy; count++;
+      }
+    }
+    if (count < 32 || xx + yy < 1e-9) return { angle: 0, coherence: 0 };
+    var angle = 0.5 * Math.atan2(2 * xy, xx - yy) * 180 / Math.PI;
+    angle = (angle + 180) % 180;
+    var trace = xx + yy, delta = Math.sqrt((xx - yy) * (xx - yy) + 4 * xy * xy);
+    return { angle: angle, coherence: trace > 0 ? delta / trace : 0 };
+  }
+
+  function searchOrientation(signal, width, height, roi) {
+    var P = phys();
+    var guide = gradientOrientation(signal, width, roi);
+    var area = roi.width * roi.height;
+    var stride = Math.max(1, Math.ceil(Math.sqrt(area / 160000)));
+    var samples = sampleRoi(signal, width, roi, stride);
+    var best = { score: -1, angle: 0, period: NaN };
+    function testAngle(deg) {
+      var angle = ((deg % 180) + 180) % 180;
+      var profile = projectSamples(samples, angle * Math.PI / 180);
+      try {
+        var r = P.fringePeriod(profile);
+        if (!isFinite(r.periodPx) || r.periodPx < 8 || r.periodPx > profile.length / 2) return;
+        // 条纹对比度在真实法线方向最高；自相关只作质量门限，避免斜向
+        // 插值得到的“更锐利”谱峰压过真实条纹方向。
+        var contrast = isFinite(r.visibility) ? r.visibility : 0;
+        var score = contrast * (0.5 + 0.5 * (r.acfPeak || 0)) +
+                    Math.min(0.01, Math.log(Math.max(1, r.spectralSnr || 1)) / 2000);
+        if (score > best.score) best = { score: score, angle: angle, period: r.periodPx };
+      } catch (e) { /* 该方向没有稳定峰，继续扫描 */ }
+    }
+    if (guide.coherence >= 0.15) {
+      for (var gd = -10; gd <= 10; gd += 2) testAngle(guide.angle + gd);
+    } else {
+      for (var deg = 0; deg < 180; deg += 5) testAngle(deg);
+    }
+    if (!(best.score > 0)) throw new Error('横竖及斜向投影都没有找到周期性条纹');
+    var center = best.angle, coarse = best.score;
+    best = { score: -1, angle: center, period: NaN };
+    for (var delta = -2; delta <= 2; delta += 0.5) testAngle(center + delta);
+    if (!(best.score > 0)) best = { score: coarse, angle: center, period: NaN };
+    return best;
+  }
+
   /* ---------------- 单条剖面 → Δx（纯函数） ---------------- */
   function analyzeProfile(profile, opts) {
     opts = opts || {};
@@ -117,26 +323,33 @@
   /* ---------------- 二维图像 → 选方向 → Δx ---------------- */
   function analyzeImageData(data, width, height, opts) {
     opts = opts || {};
-    var attempts = [];
-    ['x', 'y'].forEach(function (axis) {
-      try {
-        var prof = profileFromImageData(data, width, height, axis);
-        var r = analyzeProfile(prof, opts);
-        r.axis = axis;
-        r.profile = prof;
-        attempts.push(r);
-      } catch (e) {
-        attempts.push({ axis: axis, error: e.message, score: -1 });
-      }
-    });
-    attempts.sort(function (a, b) { return (b.score || -1) - (a.score || -1); });
-    var best = attempts[0];
-    if (!best || !isFinite(best.periodPx)) {
-      throw new Error('横竖两个方向都没找到周期性条纹，请确认图片里是等间距条纹且周期 ≥ 8 像素');
+    var signal = signalFromImageData(data, width, height);
+    var roi = centerRoi(signal, width, height);
+    var direction;
+    try {
+      direction = searchOrientation(signal, width, height, roi);
+    } catch (e) {
+      throw new Error('横竖及斜向都没有找到稳定周期性条纹。请裁到中央黄色视场，并避开蓝斑');
     }
-    best.other = attempts[1];
-    best.width = width; best.height = height;
-    return best;
+    var samples = sampleRoi(signal, width, roi, 1);
+    var prof = projectSamples(samples, direction.angle * Math.PI / 180);
+    var r = analyzeProfile(prof, opts);
+    if ((r.acfPeak || 0) < (opts.minAcf || 0.2)) {
+      throw new Error('条纹周期性不足（自相关 ' + ((r.acfPeak || 0) * 100).toFixed(1) + '%）');
+    }
+    if ((r.spectralSnr || 0) < (opts.minSnr || 3)) {
+      throw new Error('条纹频谱峰不够明显（信噪比 ' + (r.spectralSnr || 0).toFixed(1) + '）');
+    }
+    var stripeAngle = (direction.angle + 90) % 180;
+    r.axis = angleDistance(stripeAngle, 90) <= 12 ? 'x' :
+             (angleDistance(stripeAngle, 0) <= 12 ? 'y' : 'oblique');
+    r.directionDeg = direction.angle;
+    r.stripeAngleDeg = stripeAngle;
+    r.roi = roi;
+    r.signal = 'R/G';
+    r.profile = prof;
+    r.width = width; r.height = height;
+    return r;
   }
 
   /* ---------------- 浏览器：文件 → 像素 → Δx ---------------- */
