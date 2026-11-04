@@ -90,5 +90,9 @@ check('5 帧：均值与 A 类分量', s5.n === 5 && Math.abs(s5.mean - 589.24) 
 let threw2 = null;
 try { fringe.framesStats([]); } catch (e) { threw2 = e; }
 check('零帧 → 抛可读错误', !!threw2 && /没有可用/.test(threw2.message));
+const sNull = fringe.framesStats([589.2, null, '', 589.4]);
+check('null 帧不转成 0 参与多帧统计',
+      sNull.n === 2 && Math.abs(sNull.mean - 589.3) < 1e-9,
+      'n=' + sNull.n + ' mean=' + sNull.mean.toFixed(3));
 console.log('\n' + (bad === 0 ? 'P5 条纹提取门禁通过' : bad + ' 项不通过') + '（' + ok + ' pass / ' + bad + ' fail）');
 process.exit(bad === 0 ? 0 : 1);

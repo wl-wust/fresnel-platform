@@ -42,6 +42,13 @@
     magnification: '横向放大率法',
     trace: '光线追迹法'
   };
+  var LOW_VISIBILITY = 0.2;
+
+  function finiteNumber(value) {
+    return value !== null && value !== undefined && value !== '' && isFinite(value)
+      ? Number(value)
+      : null;
+  }
 
   function num(id, dflt) {
     var el = $(id);
@@ -235,7 +242,9 @@
       }).catch(function () {});
       var meta = el('div', 'frame-meta',
         '#' + (index + 1) + ' · ' +
-        (isFinite(frame.deltaXPx) ? frame.deltaXPx.toFixed(1) + ' px' : '未识别'));
+        (finiteNumber(frame.deltaXPx) !== null
+          ? finiteNumber(frame.deltaXPx).toFixed(1) + ' px'
+          : (frame.analysisError ? '识别失败' : '未识别')));
       card.appendChild(meta);
       var actions = el('div', 'frame-actions');
       var toggle = el('button', 'btn-mini', frame.excluded ? '启用' : '排除');
@@ -450,13 +459,17 @@
         var dev = r.axis === 'x'
           ? Math.abs(r.stripeAngleDeg - 90)
           : (r.axis === 'y' ? Math.min(r.stripeAngleDeg, 180 - r.stripeAngleDeg) : NaN);
-        var mmText = isFinite(r.deltaXmm) ? r.deltaXmm.toFixed(4) + ' mm' : '未标定 k';
+        var dxMm = finiteNumber(r.deltaXmm);
+        var visibility = finiteNumber(r.visibility);
+        var mmText = dxMm !== null ? dxMm.toFixed(4) + ' mm' : '未标定 k';
+        var lowVisibility = visibility !== null && visibility < LOW_VISIBILITY;
         showPreview(file,
           '已加入 ' + (S().ROLE_LABEL[role] || role) +
           ' · Δx=' + r.periodPx.toFixed(2) + ' px ' +
           '(' + mmText + ')' +
           ' · ' + (r.axis === 'oblique' ? '斜条纹 ' + r.stripeAngleDeg.toFixed(1) + '°'
-                                          : '倾角 ' + dev.toFixed(1) + '°'));
+                                          : '倾角 ' + dev.toFixed(1) + '°') +
+          (lowVisibility ? ' · 对比度偏低，建议改善遮光后重拍' : ''));
         renderAllSessionUI();
         applySessionData({ silent: true });
         return frame;
@@ -588,7 +601,15 @@
     } catch (e) { fail(e); }
   }
 
-  function clearK() { BP.store.clearK(); renderK(); BP.ui.alert('已清除标定', 'info'); }
+  function clearK() {
+    BP.store.clearK();
+    var session = activeSession();
+    if (session && S()) BP.sessions.updateSession(session.id, { calibration: null });
+    renderK();
+    renderAllSessionUI();
+    applySessionData({ silent: true });
+    BP.ui.alert('已清除当前标定', 'info');
+  }
 
   /* ---------------- 分划板标定 ----------------
    * 自动识别优先利用多条等距竖线；手点仅作兜底，并只取水平差，避免高度差污染 N。

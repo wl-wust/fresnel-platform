@@ -36,8 +36,9 @@ body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(-
 .result-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 11px; }
 .result-row:last-child { border-bottom: none; }
 .result-value { color: var(--primary); font-weight: bold; }
-.btn-group { display: flex; gap: 8px; margin-top: 15px; }
+.btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; }
 .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.3s; }
+.btn-group .btn { min-width: 0; padding-left: 6px; padding-right: 6px; font-size: 11px; white-space: nowrap; }
 .btn-primary { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 3px 15px rgba(0,212,255,0.4); }
 .btn-secondary { background: rgba(255,255,255,0.1); color: var(--text); border: 1px solid rgba(255,255,255,0.2); }

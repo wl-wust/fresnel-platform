@@ -18,6 +18,12 @@
   // 这里自己兜一层，避免本模块依赖脚本加载顺序（Node 门禁里就没加载 fmt.js）。
   function phys() { return BP.physics || global.BiprismPhysics; }
 
+  function finiteNumber(value) {
+    return value !== null && value !== undefined && value !== '' && isFinite(value)
+      ? Number(value)
+      : null;
+  }
+
   /* ---------------- 合成一维条纹剖面（带真值，用于自检） ----------------
    * I(x) = 0.5·[1 + V·cos(2πx/P + φ)] + noise + 线性漂移
    * 随机数用固定种子的 LCG，保证同参数结果可复现（报告 表 6.1 的可复现性要求）。
@@ -405,7 +411,10 @@
    *   n=1 时返回 mean 与 single=true，sd/uA 留 NaN，由页面显示"—"。
    */
   function framesStats(values) {
-    var v = (values || []).map(Number).filter(function (x) { return isFinite(x); });
+    // 不能先把 null 转成 0，否则未标定帧会污染多帧均值。
+    var v = (values || []).filter(function (x) {
+      return finiteNumber(x) !== null;
+    }).map(Number);
     if (!v.length) throw new Error('没有可用的帧');
     if (v.length === 1) {
       return { n: 1, mean: v[0], sd: NaN, uA: NaN, relSd: NaN, single: true };
@@ -429,7 +438,7 @@
         }, function (e) { per.push({ name: f.name, error: e.message }); });
       });
     }, Promise.resolve()).then(function () {
-      var ok = per.filter(function (x) { return isFinite(x.deltaXmm); });
+      var ok = per.filter(function (x) { return finiteNumber(x.deltaXmm) !== null; });
       if (!ok.length) throw new Error('所有帧都没提取成功');
       var st = framesStats(ok.map(function (x) { return x.deltaXmm; }));
       return { n: st.n, failed: per.length - st.n, meanMm: st.mean, sdMm: st.sd,

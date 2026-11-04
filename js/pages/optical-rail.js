@@ -374,7 +374,11 @@
     // 改面板任一参数 → 立刻重绘条纹（修掉"只有运行仿真才刷新"）
     ['lambda', 'n', 'beta', 'b', 'z1', 'z2', 'lens_f'].forEach(function (id) {
       var el = $(id);
-      if (el) el.addEventListener('change', function () { simulateInterference(); });
+      if (el) el.addEventListener('change', function () {
+        // z₁/z₂ 是位置量，必须先把元件摆到新位置，再按位置重算。
+        if (id === 'z1' || id === 'z2') layoutFromPanel();
+        simulateInterference();
+      });
     });
 
     global.addEventListener('resize', function () { applyScale(); });

@@ -17,8 +17,15 @@
   // 本文件用到的静态 DOM id
   var IDS = ['imageInput', 'analysisResult', 'fringeChartContainer', 'fringeChart',
              'fringeSelfTestResult', 'phoneRecordFile', 'phoneRecordResult', 'pixel_size'];
+  var LOW_VISIBILITY = 0.2;
 
   function fail(e) { BP.ui.alert(e && e.message ? e.message : String(e), 'error'); }
+
+  function finiteNumber(value) {
+    return value !== null && value !== undefined && value !== '' && isFinite(value)
+      ? Number(value)
+      : null;
+  }
 
   // 像素当量：优先用手机标定过的 k，退回波长卡里的 k
   function currentK() {
@@ -55,16 +62,34 @@
     var k = currentK();
     BP.ui.loading(true);
     return BP.fringe.analyzeFile(input.files[0], { k: k }).then(function (r) {
+      var dxMm = finiteNumber(r.deltaXmm);
+      var visibility = finiteNumber(r.visibility);
+      var lowVisibility = visibility !== null && visibility < LOW_VISIBILITY;
       var rows = [
-        { label: '条纹间距 Δx', value: F.mm(r.deltaXmm) + ' mm', cls: 'is-key' },
+        {
+          label: '条纹间距 Δx',
+          value: dxMm !== null ? F.mm(dxMm) + ' mm' : '—（未标定 k）',
+          cls: 'is-key',
+          note: dxMm === null ? '像素间距已提取；完成像素当量标定后才能得到毫米值' : ''
+        },
         { label: 'Δx（像素）', value: F.px(r.periodPx) + ' px' },
         { label: '零交叉法交叉检查', value: F.px(r.periodPxCross) + ' px',
           note: '两种算法相差 ' + (isFinite(r.periodPxCross) ? (Math.abs(r.periodPx - r.periodPxCross) / r.periodPx * 100).toFixed(2) : '—') + '%' },
-        { label: '可见度 V', value: isFinite(r.visibility) ? (r.visibility * 100).toFixed(1) + '%' : '—' },
+        {
+          label: '可见度 V',
+          value: visibility !== null ? (visibility * 100).toFixed(1) + '%' : '—',
+          cls: lowVisibility ? 'is-warn' : '',
+          note: lowVisibility ? '对比度偏低，结果可作粗查；建议改善遮光或减少反光后重拍' : ''
+        },
         { label: '条纹方向', value: stripeDirectionLabel(r) },
         { label: '识别通道 / 中央 ROI', value: r.signal + ' 通道 · ' + r.roi.width + ' × ' + r.roi.height + ' px' },
         { label: '自相关 / 频谱信噪比', value: (r.acfPeak * 100).toFixed(1) + '% / ' + r.spectralSnr.toFixed(1) },
-        { label: '像素当量 k', value: F.sci(k) + ' mm/px' + (r.scale && r.scale !== 1 ? '（图已缩 ' + r.scale.toFixed(2) + '×，已折算）' : '') },
+        {
+          label: '像素当量 k',
+          value: finiteNumber(k) !== null ? F.sci(k) + ' mm/px' : '未标定',
+          cls: finiteNumber(k) === null ? 'is-warn' : '',
+          note: r.scale && r.scale !== 1 ? '图已缩 ' + r.scale.toFixed(2) + '×，已折算' : ''
+        },
         { label: '原图尺寸', value: r.sourceSize.width + ' × ' + r.sourceSize.height + ' px' }
       ];
       BP.ui.result($('analysisResult'), rows, { caption: '式 (2)(7)：Δx 提取 → λ = d·Δx/D' });
@@ -141,16 +166,30 @@
 
         if (session && (session.method === 'basic' || session.method === 'trace')) {
           var sodium = BP.sessions.roleStats(session.id, 'sodium');
-          var d = session.method === 'trace' && session.trace ? session.trace.d_mm : 0.90213;
-          var D = session.params && isFinite(session.params.D) ? session.params.D : 1000;
-          var k = session.calibration && isFinite(session.calibration.k_mm_px)
-            ? session.calibration.k_mm_px : currentK();
-          if (sodium.n) {
+          var d = session.method === 'trace' && session.trace
+            ? finiteNumber(session.trace.d_mm)
+            : finiteNumber(session.params && session.params.d);
+          var D = finiteNumber(session.params && session.params.D);
+          if (session.method === 'trace' && D === null && session.trace) {
+            D = finiteNumber(session.trace.D_mm);
+          }
+          var sessionK = finiteNumber(session.calibration && session.calibration.k_mm_px);
+          var k = sessionK !== null ? sessionK : finiteNumber(currentK());
+          if (sodium.n && d !== null && D !== null && k !== null) {
             var lam = BP.physics.wavelengthBasic({
               d: d, D: D, dxPx: sodium.meanPx, k: k
             });
             rows.push({ label: 'λ 均值', value: F.lam(lam.value), cls: 'is-key' });
             rows.push({ label: '追迹来源', value: session.trace ? session.trace.label : '基本公式 d' });
+          } else if (sodium.n) {
+            var missing = [];
+            if (d === null) missing.push('d');
+            if (D === null) missing.push('D');
+            if (k === null) missing.push('k');
+            rows.push({
+              label: 'λ 均值', value: '未计算', cls: 'is-warn',
+              note: '缺少 ' + missing.join('、') + '，不使用报告默认值代算'
+            });
           }
         }
         BP.ui.result($('phoneRecordResult'), rows, { caption: '手机会话与角色数据已导入' });
@@ -160,10 +199,14 @@
         }
         return;
       }
-      var d = rec.params && isFinite(rec.params.d) ? rec.params.d : 0.90213;
-      var D = rec.params && isFinite(rec.params.D) ? rec.params.D : 1000;
-      var k = rec.k && isFinite(rec.k.value) ? rec.k.value : currentK();
-      var frames = (rec.frames || []).filter(function (x) { return isFinite(x.dxPx); });
+      var d = finiteNumber(rec.params && rec.params.d);
+      var D = finiteNumber(rec.params && rec.params.D);
+      var k = finiteNumber(rec.k && rec.k.value);
+      if (k === null) k = finiteNumber(currentK());
+      if (d === null || D === null || k === null) {
+        throw new Error('旧版记录缺少 d、D 或 k，不使用报告默认值代算');
+      }
+      var frames = (rec.frames || []).filter(function (x) { return finiteNumber(x.dxPx) !== null; });
       if (!frames.length) throw new Error('记录里没有可用的 Δx 数据');
 
       var lams = [], rels = [];

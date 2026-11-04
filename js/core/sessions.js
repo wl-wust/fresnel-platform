@@ -296,9 +296,16 @@
     if (!record || record.schema !== RECORD_SCHEMA) throw new Error('需要 bp.record/2');
     var incoming = Array.isArray(record.sessions) ? record.sessions : [];
     var existing = listSessions();
-    var ids = new Set(existing.map(function (s) { return s.id; }));
+    var existingIds = new Set(existing.map(function (s) { return s.id; }));
+    var incomingById = new Map();
     incoming.forEach(function (s) {
-      if (s && s.schema === SESSION_SCHEMA && !ids.has(s.id)) existing.unshift(s);
+      if (s && s.schema === SESSION_SCHEMA) incomingById.set(s.id, s);
+    });
+    existing = existing.map(function (s) {
+      return incomingById.has(s.id) ? incomingById.get(s.id) : s;
+    });
+    incoming.forEach(function (s) {
+      if (s && s.schema === SESSION_SCHEMA && !existingIds.has(s.id)) existing.unshift(s);
     });
     saveSessions(existing);
     if (record.activeSessionId && getSession(record.activeSessionId)) {

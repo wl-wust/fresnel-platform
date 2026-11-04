@@ -75,6 +75,15 @@ function check(name, fn) {
     assert(rec.sessions.length >= 1);
     return rec.sessions.length + ' sessions';
   });
+  check('同 ID 记录导入应覆盖旧会话', () => {
+    const rec = S.exportRecord();
+    const incoming = rec.sessions.find(item => item.id === ratio.id);
+    incoming.title = 'ratio corrected';
+    incoming.frames.find(item => item.id === videoFrame.id).deltaXPx = 164.2;
+    S.importRecord(rec);
+    assert.strictEqual(S.getSession(ratio.id).title, 'ratio corrected');
+    assert.strictEqual(S.listFrames(ratio.id).find(item => item.id === videoFrame.id).deltaXPx, 164.2);
+  });
 
   console.log(pass + ' pass / ' + fail + ' fail');
   if (fail) process.exit(1);
