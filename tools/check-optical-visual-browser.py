@@ -36,6 +36,18 @@ def main():
             and style_sample["g"] > 215
             and style_sample["b"] > 200
         ), style_sample
+        page.uncheck("#showLight")
+        state0 = page.evaluate("BP.pages.opticalVisual.getAnimationState()")
+        page.check("#showLight")
+        page.wait_for_timeout(250)
+        state1 = page.evaluate("BP.pages.opticalVisual.getAnimationState()")
+        page.uncheck("#showLight")
+        page.wait_for_timeout(100)
+        state2 = page.evaluate("BP.pages.opticalVisual.getAnimationState()")
+        page.wait_for_timeout(250)
+        state3 = page.evaluate("BP.pages.opticalVisual.getAnimationState()")
+        assert state1["running"] is True and state1["frames"] > state0["frames"]
+        assert state2["running"] is False and state3["frames"] == state2["frames"]
         assert page.locator("#sourceMode").count() == 1
         assert page.locator("#betaRange").count() == 1
         assert page.locator("#horizontalLock").count() == 1

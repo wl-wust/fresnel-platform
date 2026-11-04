@@ -9,6 +9,12 @@
   var doc = global.document;
   var ANGLE_MIN = 0.2;
   var ANGLE_MAX = 2.0;
+  var rafId = 0;
+  var frameCount = 0;
+  var lastFrameAt = 0;
+  var animationPhase = 0;
+  var prefersReduced = !!(global.matchMedia &&
+    global.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   function clampAngle(value, fallback) {
     var base = isFinite(+fallback) ? +fallback : 1.0;
@@ -234,6 +240,7 @@
   }
 
   function drawSource(ctx, cx, cy) {
+    var style = sourcePreset(getSourceMode());
     var x = cx - 20;
     var y = cy - 24;
     ctx.fillStyle = 'rgba(23, 33, 43, .08)';
@@ -248,6 +255,10 @@
     ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.arc(cx - 2, cy, 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = style.glow;
+    ctx.fill();
+    ctx.strokeStyle = '#17212b';
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(cx - 10, cy);
@@ -268,6 +279,153 @@
     ctx.moveTo(cx + 8, y + 48);
     ctx.lineTo(cx + 8, cy + 32);
     ctx.stroke();
+  }
+
+  function drawBeamCone(ctx, x1, y1, x2, y2, width1, width2, style, alpha) {
+    var dx = x2 - x1;
+    var dy = y2 - y1;
+    var len = Math.max(1, Math.hypot(dx, dy));
+    var nx = -dy / len;
+    var ny = dx / len;
+    var grd = ctx.createLinearGradient(x1, y1, x2, y2);
+    grd.addColorStop(0, 'rgba(' + style.rgb + ',' + (alpha * 0.42) + ')');
+    grd.addColorStop(0.72, 'rgba(' + style.rgb + ',' + alpha + ')');
+    grd.addColorStop(1, 'rgba(' + style.rgb + ',' + (alpha * 0.56) + ')');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.moveTo(x1 + nx * width1 / 2, y1 + ny * width1 / 2);
+    ctx.lineTo(x2 + nx * width2 / 2, y2 + ny * width2 / 2);
+    ctx.lineTo(x2 - nx * width2 / 2, y2 - ny * width2 / 2);
+    ctx.lineTo(x1 - nx * width1 / 2, y1 - ny * width1 / 2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.save();
+    ctx.strokeStyle = style.core;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(x1 + nx * width1 / 2, y1 + ny * width1 / 2);
+    ctx.lineTo(x2 + nx * width2 / 2, y2 + ny * width2 / 2);
+    ctx.moveTo(x1 - nx * width1 / 2, y1 - ny * width1 / 2);
+    ctx.lineTo(x2 - nx * width2 / 2, y2 - ny * width2 / 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBeamParticles(ctx, x1, y1, x2, y2, style, count, phase, radius) {
+    for (var i = 0; i < count; i++) {
+      var t = (phase + i / count) % 1;
+      var ease = 0.45 * t + 0.55 * t * t;
+      var x = x1 + (x2 - x1) * ease;
+      var y = y1 + (y2 - y1) * ease;
+      ctx.fillStyle = style.core;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawInterferenceField(ctx, x1, y1, x2, y2, half1, half2, color) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x1, y1 - half1);
+    ctx.lineTo(x2, y2 - half2);
+    ctx.lineTo(x2, y2 + half2);
+    ctx.lineTo(x1, y1 + half1);
+    ctx.closePath();
+    ctx.clip();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    for (var x = x1 - 100; x < x2 + 100; x += 9) {
+      ctx.beginPath();
+      ctx.moveTo(x, y1 - half1);
+      ctx.lineTo(x + half2 * 2, y1 + half1);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawPropagationLayer(ctx) {
+    var list = getDevices() || [];
+    var source = null;
+    var slit = null;
+    var prism = null;
+    var screen = null;
+    list.forEach(function (device) {
+      if (device.type === 'source' && !source) source = device;
+      if (device.type === 'slit' && !slit) slit = device;
+      if (device.type === 'prism' && !prism) prism = device;
+      if (device.type === 'screen' && !screen) screen = device;
+    });
+    if (!source) return;
+
+    var style = sourcePreset(getSourceMode());
+    var src = deviceCenter(source);
+    var slitP = slit ? deviceCenter(slit) : null;
+    var pr = prism ? deviceCenter(prism) : null;
+    var scr = screen ? deviceCenter(screen) : null;
+    var startX = Math.min(src.x + 28, (slitP ? slitP.x : src.x + 100) - 4);
+    var startY = src.y;
+
+    if (slitP) {
+      drawBeamCone(ctx, startX, startY, slitP.x - 5, slitP.y,
+        beamWidth(style.mode, slitP.x - startX) * 0.7,
+        Math.max(4, beamWidth(style.mode, 80) * 0.3), style, 0.20);
+    }
+    if (slitP && pr) {
+      drawBeamCone(ctx, slitP.x + 5, slitP.y, pr.x - 14, pr.y,
+        4, beamWidth(style.mode, pr.x - slitP.x) * 0.66, style, 0.23);
+    }
+
+    var end = scr || { x: (pr ? pr.x : startX) + 420, y: startY };
+    var endX = end.x - 8;
+    var endY = end.y;
+    if (pr) {
+      var beamLen = Math.max(80, endX - pr.x);
+      drawBeamCone(ctx, pr.x + 15, pr.y, endX, endY,
+        beamWidth(style.mode, beamLen) * 0.58,
+        beamWidth(style.mode, beamLen) * 1.05, style, 0.25);
+      drawInterferenceField(ctx, pr.x + 34, pr.y,
+        endX, endY, 10, Math.min(52, beamWidth(style.mode, beamLen) * 0.42),
+        'rgba(' + style.rgb + ',.18)');
+
+      var virtualX = Math.max(20, pr.x - 58);
+      var virtualGap = 17 + angleToVisualDegrees(getBeta()) * 1.4;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(' + style.rgb + ',.48)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pr.x, pr.y);
+      ctx.lineTo(virtualX, pr.y - virtualGap);
+      ctx.moveTo(pr.x, pr.y);
+      ctx.lineTo(virtualX, pr.y + virtualGap);
+      ctx.moveTo(virtualX, pr.y - virtualGap);
+      ctx.lineTo(endX, endY - 22);
+      ctx.moveTo(virtualX, pr.y + virtualGap);
+      ctx.lineTo(endX, endY + 22);
+      ctx.stroke();
+      ctx.restore();
+      if (getShowLabels()) {
+        ctx.fillStyle = '#17212b';
+        ctx.font = '10px "Microsoft YaHei", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('S₁', virtualX, pr.y - virtualGap - 5);
+        ctx.fillText('S₂', virtualX, pr.y + virtualGap + 13);
+      }
+    }
+
+    var phase = prefersReduced ? 0.35 : animationPhase;
+    drawBeamParticles(ctx, startX, startY, slitP ? slitP.x - 4 : startX + 80,
+      style, 3, phase, style.mode === 'laser' ? 1.5 : 2);
+    if (slitP && pr) {
+      drawBeamParticles(ctx, slitP.x + 4, slitP.y, pr.x - 8, pr.y,
+        style, 3, phase, style.mode === 'laser' ? 1.3 : 1.8);
+    }
+    if (pr) {
+      drawBeamParticles(ctx, pr.x + 18, pr.y, endX, endY,
+        style, 5, phase, style.mode === 'laser' ? 1.4 : 2.1);
+    }
   }
 
   function drawSlit(ctx, cx, cy) {
@@ -374,6 +532,7 @@
     drawEngineeringBackground(ctx, W, H);
     drawAxis(ctx, cfg, W);
     drawEngineeringRail(ctx, cfg, W);
+    if (getShowLight()) drawPropagationLayer(ctx);
 
     var list = getDevices() || [];
     list.forEach(function (device) {
@@ -384,6 +543,59 @@
 
   function requestRender() {
     return renderEngineeringScene();
+  }
+
+  function stopAnimation() {
+    if (rafId && global.cancelAnimationFrame) global.cancelAnimationFrame(rafId);
+    rafId = 0;
+    requestRender();
+  }
+
+  function animationTick(ts) {
+    rafId = 0;
+    if (!getShowLight() || doc.hidden || !canvas()) return;
+    frameCount += 1;
+    lastFrameAt = ts;
+    animationPhase = (ts % 2600) / 2600;
+    requestRender();
+    if (!prefersReduced) rafId = global.requestAnimationFrame(animationTick);
+  }
+
+  function startAnimation() {
+    if (prefersReduced) {
+      requestRender();
+      return false;
+    }
+    if (rafId || !getShowLight() || doc.hidden || !canvas()) return false;
+    rafId = global.requestAnimationFrame(animationTick);
+    return true;
+  }
+
+  function getAnimationState() {
+    return {
+      running: !!rafId,
+      frames: frameCount,
+      lastFrameAt: lastFrameAt,
+      phase: animationPhase,
+      reducedMotion: prefersReduced
+    };
+  }
+
+  function setShowLight(value) {
+    try { showLight = !!value; } catch (e) { /* 页面尚未初始化时忽略 */ }
+    var box = doc && doc.getElementById('showLight');
+    if (box) box.checked = !!value;
+  }
+
+  function toggleEngineeringLight() {
+    var box = doc && doc.getElementById('showLight');
+    setShowLight(!!(box && box.checked));
+    if (getShowLight()) {
+      requestRender();
+      startAnimation();
+    } else {
+      stopAnimation();
+    }
   }
 
   function bindControls() {
@@ -451,7 +663,11 @@
     isHorizontalLocked: isHorizontalLocked,
     requestRender: requestRender,
     renderEngineeringScene: renderEngineeringScene,
-    getBeta: getBeta
+    getBeta: getBeta,
+    getAnimationState: getAnimationState,
+    startAnimation: startAnimation,
+    stopAnimation: stopAnimation,
+    toggleEngineeringLight: toggleEngineeringLight
   };
 
   global.BP = global.BP || {};
@@ -463,11 +679,17 @@
     var boot = function () {
       bindControls();
       global.render = requestRender;
+      global.toggleLight = toggleEngineeringLight;
       enlargeDeviceTypes();
       global.setTimeout(function () {
         if (typeof global.layoutFromPanel === 'function') global.layoutFromPanel();
         requestRender();
+        if (getShowLight()) startAnimation();
       }, 260);
+      doc.addEventListener('visibilitychange', function () {
+        if (doc.hidden) stopAnimation();
+        else if (getShowLight()) startAnimation();
+      });
     };
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot);
     else global.setTimeout(boot, 0);
