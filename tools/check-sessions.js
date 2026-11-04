@@ -18,7 +18,15 @@ function check(name, fn) {
 
 (async () => {
   const ratio = S.createSession({ method: 'ratio', title: 'ratio test' });
-  await S.addFrame(ratio.id, { role: 'sodium', deltaXPx: 163.3 });
+  const videoFrame = await S.addFrame(ratio.id, {
+    role: 'sodium',
+    deltaXPx: 163.3,
+    source: 'video',
+    sourceName: 'lab.mp4',
+    capturedAt: 1200,
+    qualityScore: 0.86,
+    selection: { target: 20, cv: 0.002 }
+  });
   await S.addFrame(ratio.id, { role: 'sodium', deltaXPx: 163.5 });
   await S.addFrame(ratio.id, { role: 'reference', deltaXPx: 180.9 });
 
@@ -29,6 +37,14 @@ function check(name, fn) {
   check('多帧不覆盖', () => {
     assert.strictEqual(S.listFrames(ratio.id, 'sodium').length, 2);
     return S.listFrames(ratio.id, 'sodium').length + ' frames';
+  });
+  check('视频来源与评分元数据', () => {
+    assert.strictEqual(videoFrame.source, 'video');
+    assert.strictEqual(videoFrame.sourceName, 'lab.mp4');
+    assert.strictEqual(videoFrame.capturedAt, 1200);
+    assert.strictEqual(videoFrame.qualityScore, 0.86);
+    assert.strictEqual(videoFrame.selection.target, 20);
+    return videoFrame.source + ' / ' + videoFrame.qualityScore;
   });
   check('角色统计隔离', () => {
     const sodium = S.roleStats(ratio.id, 'sodium');

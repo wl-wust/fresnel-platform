@@ -202,6 +202,11 @@
       deltaXPx: isFinite(frame.deltaXPx) ? Number(frame.deltaXPx) : null,
       deltaXmm: isFinite(frame.deltaXmm) ? Number(frame.deltaXmm) : null,
       quality: isFinite(frame.quality) ? Number(frame.quality) : null,
+      source: frame.source || '',
+      sourceName: frame.sourceName || '',
+      capturedAt: isFinite(frame.capturedAt) ? Number(frame.capturedAt) : null,
+      qualityScore: isFinite(frame.qualityScore) ? Number(frame.qualityScore) : null,
+      selection: frame.selection || null,
       excluded: false,
       analysis: frame.analysis || null,
       analysisError: frame.analysisError || null
