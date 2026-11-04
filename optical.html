@@ -49,6 +49,9 @@
         <label class="tool-btn" style="justify-content: flex-start;">
           <input type="checkbox" id="showLabels" checked onchange="toggleLabels()"> 显示标签
         </label>
+        <label class="tool-btn" style="justify-content: flex-start;">
+          <input type="checkbox" id="horizontalLock"> 水平校准
+        </label>
       </div>
 
       <div class="btn-group">
@@ -83,7 +86,21 @@
         <h4>🔬 光学参数</h4>
         <div class="param-row"><span class="param-label">波长 λ</span><div><input type="number" class="param-input" id="lambda" value="589.3" step="0.1" onchange="updateParams()"><span class="param-unit">nm</span></div></div>
         <div class="param-row"><span class="param-label">折射率 n</span><div><input type="number" class="param-input" id="n" value="1.5168" step="0.0001" onchange="updateParams()"></div></div>
-        <div class="param-row"><span class="param-label">顶角 β</span><div><input type="number" class="param-input" id="beta" value="1.0" step="0.01" onchange="updateParams()"><span class="param-unit">度</span></div></div>
+        <div class="param-row param-row-stack">
+          <span class="param-label">光源</span>
+          <select class="param-input param-select" id="sourceMode">
+            <option value="sodium" selected>钠光灯 · 589.3 nm</option>
+            <option value="laser">激光 · 650 nm</option>
+          </select>
+        </div>
+        <div class="param-row param-row-stack">
+          <span class="param-label">顶角 β <small>画布角为示意放大</small></span>
+          <div class="angle-control">
+            <input type="range" id="betaRange" min="0.2" max="2.0" step="0.01" value="1.0" aria-label="棱镜顶角滑杆">
+            <input type="number" class="param-input" id="beta" value="1.0" min="0.2" max="2.0" step="0.01" onchange="updateParams()">
+            <span class="param-unit">度</span>
+          </div>
+        </div>
       </div>
 
       <div class="param-group">
@@ -128,5 +145,6 @@
 <script src="js/pages/optical-interact.js?v=a166ffe"></script>
 <script src="js/pages/optical-dpr.js?v=a166ffe"></script>
 <script src="js/pages/optical-rail.js?v=a166ffe"></script>
+<script src="js/pages/optical-visual.js?v=a166ffe"></script>
 </body>
 </html>

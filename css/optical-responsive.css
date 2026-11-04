@@ -59,4 +59,10 @@
   .canvas-area {
     height: 40vh;
   }
+  .angle-control {
+    grid-template-columns: minmax(0, 1fr) 64px auto;
+  }
+  .param-select {
+    font-size: 11px;
+  }
 }

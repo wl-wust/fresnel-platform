@@ -14,14 +14,43 @@ body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(-
 .tool-btn:hover { background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(123,44,191,0.2)); transform: translateX(3px); }
 .tool-btn.active { background: linear-gradient(135deg, var(--primary), var(--secondary)); border-color: transparent; }
 .tool-icon { font-size: 16px; }
-.canvas-area { position: relative; background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a1a 100%); overflow: hidden; }
+.canvas-area {
+  position: relative;
+  background: #f6f1e6;
+  overflow: hidden;
+  border-left: 1px solid rgba(23, 33, 43, .14);
+  border-right: 1px solid rgba(23, 33, 43, .14);
+}
 #opticalCanvas { width: 100%; height: 100%; display: block; }
-.canvas-overlay { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 6px; font-size: 11px; backdrop-filter: blur(5px); }
+.canvas-overlay {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: rgba(255, 253, 247, .92);
+  color: #17212b;
+  border: 1px solid #d7d0c2;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  backdrop-filter: blur(5px);
+}
 .canvas-info { display: flex; gap: 15px; }
 .info-item { display: flex; align-items: center; gap: 5px; }
 .info-label { color: var(--text-dim); }
 .info-value { color: var(--accent); font-weight: bold; }
-.canvas-footer { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); padding: 8px 20px; display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); }
+.canvas-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 253, 247, .94);
+  border-top: 1px solid #d7d0c2;
+  padding: 8px 20px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #5f675f;
+}
 .params-panel { background: var(--bg-panel); padding: 20px; overflow-y: auto; border-left: 1px solid rgba(0,212,255,0.2); }
 .params-panel h3 { color: var(--primary); margin-bottom: 15px; font-size: 12px; }
 .param-group { margin-bottom: 15px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
@@ -29,6 +58,12 @@ body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(-
 .param-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .param-label { font-size: 11px; color: var(--text-dim); }
 .param-input { width: 90px; padding: 5px 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(0,212,255,0.3); border-radius: 4px; color: var(--text); font-size: 12px; text-align: right; }
+.param-row-stack { align-items: stretch; flex-direction: column; gap: 6px; }
+.param-row-stack .param-label { display: flex; justify-content: space-between; gap: 8px; }
+.param-row-stack .param-label small { color: #7d8a96; font-size: 9px; font-weight: normal; }
+.param-select { width: 100%; text-align: left; }
+.angle-control { display: grid; grid-template-columns: minmax(0, 1fr) 72px auto; align-items: center; gap: 7px; }
+.angle-control input[type="range"] { min-width: 0; accent-color: #cf9d16; }
 .param-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
 .param-unit { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
 .result-box { background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,255,136,0.1)); border: 1px solid rgba(0,212,255,0.3); border-radius: 8px; padding: 12px; margin-top: 15px; }
