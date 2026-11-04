@@ -198,7 +198,7 @@
     ctx.fillText('毫米标尺 / 水平校准', right, y - 18);
   }
 
-  function drawNumberBadge(ctx, device, cx, topY) {
+  function drawNumberBadge(ctx, device, cx, topY, canvasWidth) {
     // 相邻元件很近，三层错位避免编号与名称互相覆盖。
     var badgeY = Math.max(14, topY - 28 - ((device.id - 1) % 3) * 14);
     ctx.save();
@@ -225,11 +225,13 @@
     var label = labels[device.type] || device.name || '';
     var textX = cx + 14;
     var textW = Math.max(30, ctx.measureText(label).width + 8);
+    var flipLabel = textX + textW > canvasWidth - 8;
+    if (flipLabel) textX = cx - 14 - textW;
     ctx.strokeStyle = '#17212b';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(cx + 9, badgeY);
-    ctx.lineTo(textX - 2, badgeY);
+    ctx.moveTo(cx + (flipLabel ? -9 : 9), badgeY);
+    ctx.lineTo(textX + (flipLabel ? textW : -2), badgeY);
     ctx.stroke();
     ctx.fillStyle = '#17212b';
     ctx.font = '10px "Microsoft YaHei", sans-serif';
@@ -496,7 +498,7 @@
     ctx.stroke();
   }
 
-  function drawEngineeringDevice(ctx, device, selected) {
+  function drawEngineeringDevice(ctx, device, selected, canvasWidth) {
     var p = deviceCenter(device);
     var cx = p.x;
     var cy = p.y;
@@ -516,7 +518,7 @@
       ctx.strokeRect(cx - 25, cy - 35, 50, 70);
       ctx.restore();
     }
-    if (getShowLabels()) drawNumberBadge(ctx, device, cx, topY);
+    if (getShowLabels()) drawNumberBadge(ctx, device, cx, topY, canvasWidth);
   }
 
   function renderEngineeringScene() {
@@ -536,7 +538,7 @@
 
     var list = getDevices() || [];
     list.forEach(function (device) {
-      drawEngineeringDevice(ctx, device, device === getSelected());
+      drawEngineeringDevice(ctx, device, device === getSelected(), W);
     });
     return true;
   }

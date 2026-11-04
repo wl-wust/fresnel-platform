@@ -188,7 +188,11 @@ def main():
               buttonClipped: buttons.some(button =>
                 button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight),
               resultD: document.querySelector('#result_d').innerText,
-              resultDx: document.querySelector('#result_dx').innerText
+              resultDx: document.querySelector('#result_dx').innerText,
+              sourceMode: document.querySelector('#sourceMode').value,
+              betaRange: document.querySelector('#betaRange').value,
+              horizontalLock: document.querySelector('#horizontalLock').checked,
+              visualApi: !!(window.BP && BP.pages && BP.pages.opticalVisual)
             };
           }
         """)
@@ -226,7 +230,11 @@ def main():
               buttonMaxHeight: Math.max(...buttons.map(button => button.getBoundingClientRect().height)),
               buttonClipped: buttons.some(button =>
                 button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight),
-              headerHeight: document.querySelector('.header').getBoundingClientRect().height
+              headerHeight: document.querySelector('.header').getBoundingClientRect().height,
+              controlsFit: [...document.querySelectorAll('.angle-control, .param-select')].every(el => {
+                const r = el.getBoundingClientRect();
+                return r.left >= 0 && r.right <= window.innerWidth && r.height > 0;
+              })
             };
           }
         """)
@@ -408,6 +416,10 @@ def main():
         raise SystemExit(21)
     if result["optical"]["mobile"]["buttonMaxHeight"] > 48:
         raise SystemExit(22)
+    if not result["optical"]["desktop"]["visualApi"]:
+        raise SystemExit(23)
+    if not result["optical"]["mobile"]["controlsFit"]:
+        raise SystemExit(24)
 
 
 if __name__ == "__main__":

@@ -51,12 +51,17 @@ def main():
         assert page.locator("#sourceMode").count() == 1
         assert page.locator("#betaRange").count() == 1
         assert page.locator("#horizontalLock").count() == 1
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
+        initial_d = page.locator("#result_d").inner_text()
         page.select_option("#sourceMode", "laser")
         assert page.input_value("#lambda") == "650"
+        assert page.evaluate("BP.pages.opticalVisual.getSourceMode()") == "laser"
         page.fill("#beta", "1.5")
         page.dispatch_event("#beta", "change")
         assert page.input_value("#betaRange") == "1.5"
+        assert page.evaluate("BP.pages.opticalVisual.getBeta()") == 1.5
+        assert page.locator("#result_d").inner_text() != initial_d
 
         page.check("#horizontalLock")
         canvas_box = page.locator("#opticalCanvas").bounding_box()
@@ -101,6 +106,31 @@ def main():
             """
         )
         assert abs(free["y"] - locked["y"]) > 20
+
+        reduced_page = browser.new_page(viewport={"width": 1024, "height": 820})
+        reduced_page.emulate_media(reduced_motion="reduce")
+        reduced_page.goto(BASE + "/optical.html", wait_until="networkidle")
+        reduced_page.wait_for_timeout(400)
+        reduced_state = reduced_page.evaluate(
+            "BP.pages.opticalVisual.getAnimationState()"
+        )
+        reduced_pixels = reduced_page.evaluate(
+            """
+            () => {
+              const cv = document.getElementById('opticalCanvas');
+              const data = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+              let colored = 0;
+              for (let i = 0; i < data.length; i += 200) {
+                if (data[i] + data[i + 1] + data[i + 2] > 80) colored += 1;
+              }
+              return colored;
+            }
+            """
+        )
+        assert reduced_state["reducedMotion"] is True
+        assert reduced_state["running"] is False
+        assert reduced_pixels > 100
+        reduced_page.close()
 
         assert not errors, errors
         browser.close()
