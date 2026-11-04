@@ -9,6 +9,22 @@
 <link rel="stylesheet" href="css/app-responsive.css?v=3237fe4">
 </head>
 <body>
+<section id="streamPage" class="stream-page" hidden aria-label="手机视频推流">
+  <video id="streamVideo" autoplay playsinline muted></video>
+  <div class="stream-overlay">
+    <div class="stream-topline">
+      <strong>实验画面推流</strong>
+      <span id="streamConnection">未连接</span>
+    </div>
+    <div id="streamStatus" class="stream-status" aria-live="polite">点击下方按钮开启摄像头</div>
+    <div id="streamMeta" class="stream-meta">摄像头尚未启动</div>
+    <div class="stream-actions">
+      <button id="streamStart" class="stream-btn stream-btn-primary" type="button">开启摄像头并连接</button>
+      <button id="streamSwitch" class="stream-btn" type="button" hidden>切换镜头</button>
+      <button id="streamStop" class="stream-btn stream-btn-stop" type="button" hidden>停止推流</button>
+    </div>
+  </div>
+</section>
 <div class="app-container">
 
   <header class="app-header">
@@ -224,5 +240,7 @@
 <script src="js/core/sessions.js?v=3237fe4"></script>
 <script src="js/core/fringe.js?v=3237fe4"></script>
 <script src="js/pages/mobile.js?v=3237fe4"></script>
+<script src="vendor/peerjs.min.js?v=3237fe4"></script>
+<script src="js/pages/mobile-stream.js?v=3237fe4"></script>
 </body>
 </html>
