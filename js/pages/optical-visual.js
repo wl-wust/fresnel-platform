@@ -102,11 +102,28 @@
     return !!(el && el.checked);
   }
 
-  function deviceCenter(device) {
+  function biprismGeometry(beta, compact) {
+    var visual = angleToVisualDegrees(beta);
+    var flare = compact ? 5 + visual * 0.15 : 7 + visual * 0.72;
+    var halfH = compact ? 23 : 27;
+    var baseX = compact ? 10 : 16;
+    return {
+      flare: flare,
+      halfH: halfH,
+      baseX: baseX,
+      vertices: [
+        { x: -flare, y: 0 },
+        { x: baseX, y: -halfH },
+        { x: baseX, y: halfH }
+      ]
+    };
+  }
+
+  function deviceCenter(device, compact) {
     if (!device) return { x: 0, y: 0 };
     var x = device.x + device.width / 2;
     var y = device.y + device.height / 2;
-    if (device.type === 'source') x = Math.max(28, x);
+    if (device.type === 'source') x = Math.max(compact ? 10 : 28, x);
     return { x: x, y: y };
   }
 
@@ -241,45 +258,48 @@
     return textW;
   }
 
-  function drawSource(ctx, cx, cy) {
+  function drawSource(ctx, cx, cy, compact) {
     var style = sourcePreset(getSourceMode());
-    var x = cx - 20;
-    var y = cy - 24;
+    var bodyW = compact ? 22 : 40;
+    var bodyH = compact ? 42 : 48;
+    var hornW = compact ? 4 : 12;
+    var x = cx - bodyW / 2;
+    var y = cy - bodyH / 2;
     ctx.fillStyle = 'rgba(23, 33, 43, .08)';
-    roundRect(ctx, x + 2, y + 3, 40, 48, 6);
+    roundRect(ctx, x + 2, y + 3, bodyW, bodyH, 6);
     ctx.fill();
     ctx.fillStyle = '#fffdf7';
     ctx.strokeStyle = '#17212b';
     ctx.lineWidth = 2.6;
-    roundRect(ctx, x, y, 40, 48, 6);
+    roundRect(ctx, x, y, bodyW, bodyH, 6);
     ctx.fill();
     ctx.stroke();
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(cx - 2, cy, 8, 0, Math.PI * 2);
+    ctx.arc(cx - 2, cy, compact ? 6 : 8, 0, Math.PI * 2);
     ctx.stroke();
     ctx.fillStyle = style.glow;
     ctx.fill();
     ctx.strokeStyle = '#17212b';
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx - 10, cy);
-    ctx.lineTo(cx + 6, cy);
-    ctx.moveTo(cx - 2, cy - 8);
-    ctx.lineTo(cx - 2, cy + 8);
+    ctx.moveTo(cx - (compact ? 8 : 10), cy);
+    ctx.lineTo(cx + (compact ? 4 : 6), cy);
+    ctx.moveTo(cx - 2, cy - (compact ? 6 : 8));
+    ctx.lineTo(cx - 2, cy + (compact ? 6 : 8));
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(x + 40, y + 11);
-    ctx.lineTo(x + 52, y + 4);
-    ctx.lineTo(x + 52, y + 44);
-    ctx.lineTo(x + 40, y + 37);
+    ctx.moveTo(x + bodyW, y + (compact ? 9 : 11));
+    ctx.lineTo(x + bodyW + hornW, y + (compact ? 4 : 4));
+    ctx.lineTo(x + bodyW + hornW, y + bodyH - (compact ? 4 : 4));
+    ctx.lineTo(x + bodyW, y + bodyH - (compact ? 9 : 11));
     ctx.closePath();
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx - 12, y + 48);
-    ctx.lineTo(cx - 12, cy + 32);
-    ctx.moveTo(cx + 8, y + 48);
-    ctx.lineTo(cx + 8, cy + 32);
+    ctx.moveTo(cx - bodyW * 0.3, y + bodyH);
+    ctx.lineTo(cx - bodyW * 0.3, cy + (compact ? 27 : 32));
+    ctx.moveTo(cx + bodyW * 0.2, y + bodyH);
+    ctx.lineTo(cx + bodyW * 0.2, cy + (compact ? 27 : 32));
     ctx.stroke();
   }
 
@@ -347,7 +367,7 @@
     ctx.restore();
   }
 
-  function drawPropagationLayer(ctx) {
+  function drawPropagationLayer(ctx, canvasWidth) {
     var list = getDevices() || [];
     var source = null;
     var slit = null;
@@ -362,11 +382,16 @@
     if (!source) return;
 
     var style = sourcePreset(getSourceMode());
-    var src = deviceCenter(source);
-    var slitP = slit ? deviceCenter(slit) : null;
-    var pr = prism ? deviceCenter(prism) : null;
-    var scr = screen ? deviceCenter(screen) : null;
-    var startX = Math.min(src.x + 28, (slitP ? slitP.x : src.x + 100) - 4);
+    var compact = canvasWidth < 520;
+    var src = deviceCenter(source, compact);
+    var slitP = slit ? deviceCenter(slit, compact) : null;
+    var pr = prism ? deviceCenter(prism, compact) : null;
+    var scr = screen ? deviceCenter(screen, compact) : null;
+    var prismGeometry = pr ? biprismGeometry(getBeta(), canvasWidth < 520) : null;
+    var prismApexX = pr ? pr.x + prismGeometry.vertices[0].x : 0;
+    var prismBaseX = pr ? pr.x + prismGeometry.baseX : 0;
+    var startX = Math.min(src.x + (compact ? 13 : 28),
+      (slitP ? slitP.x : src.x + 100) - 4);
     var startY = src.y;
 
     if (slitP) {
@@ -375,19 +400,19 @@
         Math.max(4, beamWidth(style.mode, 80) * 0.3), style, 0.20);
     }
     if (slitP && pr) {
-      drawBeamCone(ctx, slitP.x + 5, slitP.y, pr.x - 14, pr.y,
-        4, beamWidth(style.mode, pr.x - slitP.x) * 0.66, style, 0.23);
+      drawBeamCone(ctx, slitP.x + 5, slitP.y, prismApexX - 1, pr.y,
+        4, beamWidth(style.mode, prismApexX - slitP.x) * 0.66, style, 0.23);
     }
 
     var end = scr || { x: (pr ? pr.x : startX) + 420, y: startY };
     var endX = end.x - 8;
     var endY = end.y;
     if (pr) {
-      var beamLen = Math.max(80, endX - pr.x);
-      drawBeamCone(ctx, pr.x + 15, pr.y, endX, endY,
+      var beamLen = Math.max(80, endX - prismBaseX);
+      drawBeamCone(ctx, prismBaseX + 1, pr.y, endX, endY,
         beamWidth(style.mode, beamLen) * 0.58,
         beamWidth(style.mode, beamLen) * 1.05, style, 0.25);
-      drawInterferenceField(ctx, pr.x + 34, pr.y,
+      drawInterferenceField(ctx, prismBaseX + 18, pr.y,
         endX, endY, 10, Math.min(52, beamWidth(style.mode, beamLen) * 0.42),
         'rgba(' + style.rgb + ',.18)');
 
@@ -398,9 +423,9 @@
       ctx.lineWidth = 1.2;
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
-      ctx.moveTo(pr.x, pr.y);
+      ctx.moveTo(prismBaseX, pr.y);
       ctx.lineTo(virtualX, pr.y - virtualGap);
-      ctx.moveTo(pr.x, pr.y);
+      ctx.moveTo(prismBaseX, pr.y);
       ctx.lineTo(virtualX, pr.y + virtualGap);
       ctx.moveTo(virtualX, pr.y - virtualGap);
       ctx.lineTo(endX, endY - 22);
@@ -421,11 +446,11 @@
     drawBeamParticles(ctx, startX, startY, slitP ? slitP.x - 4 : startX + 80,
       style, 3, phase, style.mode === 'laser' ? 1.5 : 2);
     if (slitP && pr) {
-      drawBeamParticles(ctx, slitP.x + 4, slitP.y, pr.x - 8, pr.y,
+      drawBeamParticles(ctx, slitP.x + 4, slitP.y, prismApexX - 2, pr.y,
         style, 3, phase, style.mode === 'laser' ? 1.3 : 1.8);
     }
     if (pr) {
-      drawBeamParticles(ctx, pr.x + 18, pr.y, endX, endY,
+      drawBeamParticles(ctx, prismBaseX + 2, pr.y, endX, endY,
         style, 5, phase, style.mode === 'laser' ? 1.4 : 2.1);
     }
   }
@@ -444,28 +469,27 @@
     ctx.fillRect(cx - 1.5, cy - 5, 3, 10);
   }
 
-  function drawBiprism(ctx, cx, cy, beta) {
-    var visual = angleToVisualDegrees(beta);
-    var flare = 7 + visual * 0.72;
-    var halfH = 27;
+  function drawBiprism(ctx, cx, cy, beta, canvasWidth) {
+    var geometry = biprismGeometry(beta, canvasWidth < 520);
+    // 双棱镜由上下两个小顶角棱镜底边相接，截面是左侧钝顶角、右侧宽底边的浅三角形。
     ctx.fillStyle = 'rgba(211, 163, 34, .12)';
     ctx.strokeStyle = '#17212b';
     ctx.lineWidth = 2.4;
     ctx.beginPath();
-    ctx.moveTo(cx - flare, cy - halfH);
-    ctx.lineTo(cx + 16, cy - halfH);
-    ctx.lineTo(cx + 16, cy + halfH);
-    ctx.lineTo(cx - flare, cy + halfH);
-    ctx.lineTo(cx, cy);
+    geometry.vertices.forEach(function (point, index) {
+      if (index === 0) ctx.moveTo(cx + point.x, cy + point.y);
+      else ctx.lineTo(cx + point.x, cy + point.y);
+    });
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+
+    // 水平接缝表示两块棱镜的底边相接。
     ctx.strokeStyle = 'rgba(23, 33, 43, .45)';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 0.9;
     ctx.beginPath();
-    ctx.moveTo(cx - flare + 3, cy - halfH + 5);
-    ctx.lineTo(cx - 2, cy);
-    ctx.lineTo(cx - flare + 3, cy + halfH - 5);
+    ctx.moveTo(cx + geometry.vertices[0].x + 1, cy);
+    ctx.lineTo(cx + geometry.baseX, cy);
     ctx.stroke();
   }
 
@@ -499,14 +523,15 @@
   }
 
   function drawEngineeringDevice(ctx, device, selected, canvasWidth) {
-    var p = deviceCenter(device);
+    var compact = canvasWidth < 520;
+    var p = deviceCenter(device, compact);
     var cx = p.x;
     var cy = p.y;
     var topY = cy - 30;
 
-    if (device.type === 'source') drawSource(ctx, cx, cy);
+    if (device.type === 'source') drawSource(ctx, cx, cy, compact);
     else if (device.type === 'slit') drawSlit(ctx, cx, cy);
-    else if (device.type === 'prism') drawBiprism(ctx, cx, cy, getBeta());
+    else if (device.type === 'prism') drawBiprism(ctx, cx, cy, getBeta(), canvasWidth);
     else if (device.type === 'lens') drawLens(ctx, cx, cy);
     else if (device.type === 'screen') drawScreen(ctx, cx, cy);
 
@@ -534,7 +559,7 @@
     drawEngineeringBackground(ctx, W, H);
     drawAxis(ctx, cfg, W);
     drawEngineeringRail(ctx, cfg, W);
-    if (getShowLight()) drawPropagationLayer(ctx);
+    if (getShowLight()) drawPropagationLayer(ctx, W);
 
     var list = getDevices() || [];
     list.forEach(function (device) {
@@ -658,6 +683,7 @@
     ANGLE_MAX: ANGLE_MAX,
     clampAngle: clampAngle,
     angleToVisualDegrees: angleToVisualDegrees,
+    biprismGeometry: biprismGeometry,
     sourcePreset: sourcePreset,
     beamWidth: beamWidth,
     bindControls: bindControls,
