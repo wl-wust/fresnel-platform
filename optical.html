@@ -62,20 +62,124 @@
       </div>
     </div>
 
-    <!-- 中间画布 -->
-    <div class="canvas-area">
-      <canvas id="opticalCanvas"></canvas>
+    <!-- 中间画布：教学示意与 COMSOL 预计算验证共用 -->
+    <div class="canvas-area" id="opticalCanvasArea">
+      <div class="canvas-mode-bar" role="tablist" aria-label="光学视图模式">
+        <button class="canvas-mode-btn active" id="teachingModeTab" type="button"
+                role="tab" aria-selected="true" aria-controls="teachingView"
+                data-optical-mode="teaching">教学示意</button>
+        <button class="canvas-mode-btn" id="comsolModeTab" type="button"
+                role="tab" aria-selected="false" aria-controls="comsolView"
+                data-optical-mode="comsol">COMSOL 验证</button>
+      </div>
 
-      <div class="canvas-overlay">
+      <canvas id="opticalCanvas" class="teaching-only" aria-label="菲涅耳双棱镜教学示意画布"></canvas>
+
+      <div class="canvas-overlay teaching-only" id="teachingView">
         <div class="canvas-info">
           <div class="info-item"><span class="info-label">坐标:</span><span class="info-value" id="coords">-</span></div>
           <div class="info-item"><span class="info-label">选中:</span><span class="info-value" id="selected">无</span></div>
         </div>
       </div>
 
-      <div class="canvas-footer">
+      <div class="canvas-footer teaching-only">
         <span>拖拽元件即改变真实距离（台面 0–1200 mm）　·　面板与位置双向同步</span>
       </div>
+
+      <section class="comsol-view" id="comsolView" role="tabpanel"
+               aria-labelledby="comsolModeTab" hidden>
+        <header class="comsol-head">
+          <div>
+            <span class="comsol-kicker">COMSOL 6.4 · 静态预计算</span>
+            <h2>完整装置、二维光路与干涉交叠</h2>
+          </div>
+          <span class="comsol-match" id="comsolMatch">参数匹配基准场景</span>
+        </header>
+
+        <div class="comsol-param-notice" id="comsolParamNotice" role="status" hidden>
+          当前参数已偏离基准场景，图像与指标仍对应下方列出的 COMSOL 参数。
+        </div>
+
+        <div class="comsol-layout">
+          <div class="comsol-figure-panel">
+            <div class="comsol-figure-tabs" role="tablist" aria-label="COMSOL 预计算图">
+              <button class="comsol-figure-tab active" type="button" role="tab"
+                      aria-selected="true" aria-controls="comsolFigure2d"
+                      data-comsol-figure="comsolFigure2d">完整光路</button>
+              <button class="comsol-figure-tab" type="button" role="tab"
+                      aria-selected="false" aria-controls="comsolFigurePath"
+                      data-comsol-figure="comsolFigurePath">光路三视图</button>
+              <button class="comsol-figure-tab" type="button" role="tab"
+                      aria-selected="false" aria-controls="comsolFigureApparatus"
+                      data-comsol-figure="comsolFigureApparatus">装置外观</button>
+            </div>
+
+            <figure class="comsol-figure">
+              <div class="comsol-image-stage">
+                <img id="comsolFigure2d" class="comsol-figure-image active"
+                     src="comsol/FresnelBiprism_2D_View.png"
+                     alt="COMSOL 绘制的菲涅耳双棱镜完整二维装置、上下两束折射光和绿色干涉交叠区"
+                     data-caption="完整二维装置：黄色入射光经双棱镜分成两束，绿色区域为 x = 192–1000 mm 的干涉交叠区。">
+                <img id="comsolFigurePath" class="comsol-figure-image"
+                     src="comsol/FresnelBiprism_OpticalPath_Interference.png"
+                     alt="COMSOL 光路三视图，包含完整光路、双棱镜局部放大和屏前干涉区"
+                     loading="lazy"
+                     data-caption="三视图汇总：完整光路、光源与双棱镜局部放大，以及屏前干涉区的几何包络。">
+                <img id="comsolFigureApparatus" class="comsol-figure-image"
+                     src="comsol/FresnelBiprism_Apparatus_Appearance.png"
+                     alt="COMSOL 建立的菲涅耳双棱镜教学实验装置外观模型"
+                     loading="lazy"
+                     data-caption="机械装置外观：导轨、支脚、光源、双棱镜 V 形夹持架和实体光屏；纵向长度仅作显示压缩。">
+              </div>
+              <figcaption>
+                <span id="comsolFigureCaption">完整二维装置：黄色入射光经双棱镜分成两束，绿色区域为 x = 192–1000 mm 的干涉交叠区。</span>
+                <a class="comsol-original-link" id="comsolOpenOriginal"
+                   href="comsol/FresnelBiprism_2D_View.png" target="_blank" rel="noopener">查看原图</a>
+              </figcaption>
+            </figure>
+          </div>
+
+          <aside class="comsol-metrics" aria-label="COMSOL 验证指标">
+            <div class="comsol-metric-grid">
+              <div class="comsol-metric">
+                <span>虚光源间距 d</span>
+                <strong>0.898786 <small>mm</small></strong>
+                <em>平台 0.901986 mm · 偏差 −0.355%</em>
+              </div>
+              <div class="comsol-metric">
+                <span>平台条纹间距 Δx</span>
+                <strong>0.653336 <small>mm</small></strong>
+                <em>由平台傍轴参数配套计算</em>
+              </div>
+              <div class="comsol-metric">
+                <span>屏面交叠宽度</span>
+                <strong>3.015 <small>mm</small></strong>
+                <em>y = −1.507 ～ +1.507 mm</em>
+              </div>
+              <div class="comsol-metric">
+                <span>轴向交叠区</span>
+                <strong>192–1000 <small>mm</small></strong>
+                <em>两束折射光从 192 mm 开始交叠</em>
+              </div>
+            </div>
+
+            <div class="comsol-reference">
+              <h3>基准参数</h3>
+              <dl>
+                <div><dt>λ</dt><dd>589.3 nm</dd></div>
+                <div><dt>n</dt><dd>1.5168</dd></div>
+                <div><dt>单侧棱镜角 β</dt><dd>1.0°</dd></div>
+                <div><dt>z₁ / z₂</dt><dd>50 / 950 mm</dd></div>
+              </dl>
+            </div>
+
+            <p class="comsol-note">
+              此模式展示 COMSOL 6.4 的预计算投影，不在浏览器内实时求解。COMSOL 验证光路与交叠区，现有平台继续负责条纹强度、参数计算和实验数据处理。
+            </p>
+            <a class="comsol-doc-link" href="comsol/README.md" target="_blank" rel="noopener">查看 COMSOL 模型说明</a>
+          </aside>
+        </div>
+      </section>
     </div>
 
     <!-- 右侧参数面板 -->
@@ -146,5 +250,6 @@
 <script src="js/pages/optical-dpr.js?v=271ce9c"></script>
 <script src="js/pages/optical-rail.js?v=271ce9c"></script>
 <script src="js/pages/optical-visual.js?v=271ce9c"></script>
+<script src="js/pages/optical-comsol.js?v=271ce9c"></script>
 </body>
 </html>

@@ -16,9 +16,9 @@ const path = require('path');
 // 每页应出现的 ?v= 处数（= 该页所有 <script src> + <link href> 的数量）
 // index  : 2 css + 18 script
 // mobile : 2 css + 11 script
-// optical: 2 css + 11 script（含 optical-rail.js 与 optical-visual.js）
+// optical: 2 css + 12 script（含 optical-rail.js、optical-visual.js 与 optical-comsol.js）
 // 404    : 1 css
-const EXPECT = { 'index.html': 20, 'mobile.html': 13, 'optical.html': 13, '404.html': 1 };
+const EXPECT = { 'index.html': 20, 'mobile.html': 13, 'optical.html': 14, '404.html': 1 };
 
 function findRepo(start) {
   let d = path.resolve(start);

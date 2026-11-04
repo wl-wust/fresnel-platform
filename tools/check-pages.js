@@ -66,6 +66,15 @@ if (fs.existsSync(optPath)) {
   check('光学页有"删除选中元件"按钮', /onclick="deleteSelected\(\)"/.test(opt));
   const i1 = opt.indexOf('optical-fix.js'), i2 = opt.indexOf('optical-interact.js');
   check('光学页加载 Pointer 交互层且在 fix 之后', i2 > i1 && i1 >= 0, 'fix@' + i1 + ' interact@' + i2);
+  const iVisual = opt.indexOf('optical-visual.js'), iComsol = opt.indexOf('optical-comsol.js');
+  check('光学页加载 COMSOL 预计算视图且在视觉层之后',
+        iComsol > iVisual && iVisual >= 0, 'visual@' + iVisual + ' comsol@' + iComsol);
+  check('光学页提供教学示意与 COMSOL 验证模式',
+        /data-optical-mode="teaching"/.test(opt) && /data-optical-mode="comsol"/.test(opt));
+  check('COMSOL 验证模式包含三张预计算图与指标容器',
+        ['FresnelBiprism_2D_View.png', 'FresnelBiprism_OpticalPath_Interference.png',
+         'FresnelBiprism_Apparatus_Appearance.png', 'id="comsolMatch"', 'id="comsolParamNotice"']
+          .every(token => opt.includes(token)));
 } else {
   check('存在 optical.html', false);
 }

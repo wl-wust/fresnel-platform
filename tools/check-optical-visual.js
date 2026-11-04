@@ -1,6 +1,7 @@
 /* check-optical-visual.js —— 光学工程线稿的纯 Node 门禁 */
 const path = require('path');
 const visual = require(path.resolve(__dirname, '../js/pages/optical-visual.js'));
+const comsol = require(path.resolve(__dirname, '../js/pages/optical-comsol.js'));
 
 let ok = 0;
 let bad = 0;
@@ -36,6 +37,23 @@ check('激光默认 650 nm', visual.sourcePreset('laser').lambda === 650);
 check('钠灯默认 589.3 nm', visual.sourcePreset('sodium').lambda === 589.3);
 check('未知光源回退到钠灯', visual.sourcePreset('unknown').mode === 'sodium');
 check('激光光束窄于钠灯光束', visual.beamWidth('laser', 400) < visual.beamWidth('sodium', 400));
+const baselineState = comsol.parameterState({
+  lambdaNm: 589.3,
+  refractiveIndex: 1.5168,
+  betaDeg: 1,
+  z1Mm: 50,
+  z2Mm: 950
+});
+check('COMSOL 基准参数完整匹配', baselineState.matches && baselineState.changed.length === 0);
+const changedState = comsol.parameterState({
+  lambdaNm: 650,
+  refractiveIndex: 1.5168,
+  betaDeg: 1,
+  z1Mm: 50,
+  z2Mm: 950
+});
+check('COMSOL 能识别偏离基准的波长',
+  !changedState.matches && changedState.changed.length === 1 && changedState.changed[0] === 'lambdaNm');
 
 console.log('\n' + (bad === 0 ? '光学视觉门禁通过' : bad + ' 项不通过') +
   '（' + ok + ' pass / ' + bad + ' fail）');
