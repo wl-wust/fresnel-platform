@@ -48,4 +48,27 @@ assert.strictEqual(
   '主频波动过大时不应提示足够'
 );
 
-console.log('视频抽帧评分检查通过（10 项）');
+assert.strictEqual(
+  S.recordingFilename('session-a', 'ratio', 'sodium').startsWith('session-a-ratio-sodium-'),
+  true,
+  '录制文件名应包含会话、方法与角色'
+);
+assert(/\.webm$/.test(S.recordingFilename('session-a', 'ratio', 'sodium')), '原始视频应保存为 WebM');
+assert.strictEqual(
+  S.pickMimeType([
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8'
+  ], {
+    isTypeSupported: function (type) { return type.indexOf('vp9') >= 0; }
+  }),
+  'video/webm;codecs=vp9',
+  '应选择浏览器支持的首个编码'
+);
+
+const samplePlan = S.sampleTimes(10, 0.5);
+assert.strictEqual(samplePlan.length, 20, '10 秒视频应按 0.5 秒生成 20 个采样点');
+assert.strictEqual(samplePlan[0], 0, '采样应从视频开头开始');
+assert.strictEqual(samplePlan[samplePlan.length - 1], 9.5, '采样点不应越过视频结尾');
+assert.strictEqual(S.sampleTimes(2, 0.5).length, 4, '短片段也应按固定间隔采样');
+
+console.log('视频抽帧评分检查通过（17 项）');

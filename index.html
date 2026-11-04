@@ -43,6 +43,66 @@
       </div>
       <div class="result-panel" id="analysisResult"></div>
     </div>
+
+    <section id="videoPanel" class="video-panel" aria-labelledby="videoPanelTitle">
+      <div class="video-panel-heading">
+        <div>
+          <h3 id="videoPanelTitle">实时最佳帧采集</h3>
+          <p class="hint">手机扫码推流，或在下方导入视频分析</p>
+        </div>
+        <span id="videoConnectionBadge" class="video-connection-badge">未连接</span>
+      </div>
+
+      <div class="video-config">
+        <label>测量方法
+          <select id="videoMethodSelect">
+            <option value="basic">基本公式</option>
+            <option value="ratio" selected>比值法</option>
+            <option value="magnification">横向放大率法</option>
+            <option value="trace">光线追迹法</option>
+          </select>
+        </label>
+        <label>图像角色
+          <select id="videoRoleSelect"></select>
+        </label>
+        <label>目标帧数
+          <select id="videoTargetSelect">
+            <option value="10">10 帧</option>
+            <option value="20" selected>20 帧</option>
+            <option value="30">30 帧</option>
+          </select>
+        </label>
+        <label class="video-record-toggle">
+          <input id="videoRecordToggle" type="checkbox">
+          同步录制原始视频
+        </label>
+        <button id="videoPairButton" type="button">生成扫码连接</button>
+      </div>
+
+      <div class="video-live-grid">
+        <div id="videoQrBox" class="video-qr-box">
+          <strong>手机扫码推流</strong>
+          <span>先选择测量方法和图像角色</span>
+        </div>
+        <div class="video-preview-box">
+          <video id="pcRemoteVideo" autoplay playsinline muted></video>
+          <div id="videoLiveStatus" class="video-live-status" aria-live="polite">尚未连接</div>
+        </div>
+      </div>
+
+      <div class="video-candidate-bar">
+        <div id="videoCandidateStats">候选 0 / 20，主频波动 —</div>
+        <div class="video-actions">
+          <button id="videoConfirmButton" type="button" disabled>确认加入当前角色</button>
+          <button id="videoStopButton" type="button" disabled>停止连接</button>
+          <button id="videoImportButton" type="button">导入视频分析</button>
+          <input id="videoImportInput" type="file" accept="video/*" hidden>
+        </div>
+      </div>
+      <progress id="videoImportProgress" max="1" value="0" hidden></progress>
+      <div id="videoCandidateGallery" class="video-candidate-gallery"></div>
+    </section>
+
     <div class="result-panel" id="pcSessionSummary" style="margin-top:16px;"></div>
     <div id="fringeSelfTestResult" class="result-box"></div>
     <div class="chart-container" id="fringeChartContainer" style="display:none">
@@ -257,5 +317,9 @@
 <script src="js/pages/pc.js?v=3237fe4"></script>
 <script src="js/pages/pc-unc.js?v=3237fe4"></script>
 <script src="js/pages/pc-fringe.js?v=3237fe4"></script>
+<script src="vendor/qrcode.min.js?v=3237fe4"></script>
+<script src="vendor/peerjs.min.js?v=3237fe4"></script>
+<script src="js/core/video-sampler.js?v=3237fe4"></script>
+<script src="js/pages/pc-video.js?v=3237fe4"></script>
 </body>
 </html>

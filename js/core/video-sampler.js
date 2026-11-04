@@ -104,13 +104,46 @@
     return stats.n >= wanted && isFinite(stats.cv) && stats.cv <= o.maxCv;
   }
 
+  function pickMimeType(list, recorderCtor) {
+    var probe = recorderCtor || global.MediaRecorder;
+    if (!probe || typeof probe.isTypeSupported !== 'function') return '';
+    for (var i = 0; i < (list || []).length; i++) {
+      if (probe.isTypeSupported(list[i])) return list[i];
+    }
+    return '';
+  }
+
+  function filenamePart(value) {
+    return String(value || 'session').replace(/[^A-Za-z0-9_-]+/g, '-');
+  }
+
+  function recordingFilename(sessionId, method, role, date) {
+    var stamp = (date || new Date()).toISOString().replace(/[:.]/g, '-');
+    return filenamePart(sessionId) + '-' + filenamePart(method) + '-' +
+      filenamePart(role) + '-' + stamp + '.webm';
+  }
+
+  function sampleTimes(durationSec, gapSec) {
+    var gap = Number(gapSec) > 0 ? Number(gapSec) : 0.5;
+    var duration = Number(durationSec);
+    var count = isFinite(duration) && duration > 0
+      ? Math.max(1, Math.floor(duration / gap))
+      : 1;
+    var result = [];
+    for (var i = 0; i < count; i++) result.push(Number((i * gap).toFixed(3)));
+    return result;
+  }
+
   var API = {
     DEFAULTS: DEFAULTS,
     isValid: isValid,
     score: score,
     selectCandidates: selectCandidates,
     summary: summary,
-    isEnough: isEnough
+    isEnough: isEnough,
+    pickMimeType: pickMimeType,
+    recordingFilename: recordingFilename,
+    sampleTimes: sampleTimes
   };
 
   global.BP = global.BP || {};

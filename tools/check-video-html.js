@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, '..');
 const pc = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const mobile = fs.readFileSync(path.join(root, 'mobile.html'), 'utf8');
 const stream = fs.readFileSync(path.join(root, 'js/pages/mobile-stream.js'), 'utf8');
+const pcVideo = fs.readFileSync(path.join(root, 'js/pages/pc-video.js'), 'utf8');
 
 let pass = 0;
 let fail = 0;
@@ -49,6 +50,29 @@ check('推流状态与断线处理', () => {
   assert(/pc\.connectionState === 'connected'/.test(stream));
   assert(/streamStop/.test(stream));
   return 'connectionstate';
+});
+
+check('PC 视频面板与脚本顺序', () => {
+  assert(/id="videoPanel"/.test(pc));
+  assert(/id="videoMethodSelect"/.test(pc));
+  assert(/id="videoCandidateGallery"/.test(pc));
+  assert(/vendor\/qrcode\.min\.js/.test(pc));
+  assert(/vendor\/peerjs\.min\.js/.test(pc));
+  assert(/js\/core\/video-sampler\.js/.test(pc));
+  assert(pc.indexOf('vendor/qrcode.min.js') < pc.indexOf('js/pages/pc-video.js'));
+  assert(pc.indexOf('vendor/peerjs.min.js') < pc.indexOf('js/pages/pc-video.js'));
+  assert(pc.indexOf('js/core/video-sampler.js') < pc.indexOf('js/pages/pc-video.js'));
+  return 'videoPanel -> pc-video';
+});
+
+check('直播录制与视频导入已接线', () => {
+  assert(/id="videoRecordToggle"/.test(pc));
+  assert(/id="videoImportInput"/.test(pc));
+  assert(/MediaRecorder/.test(pcVideo));
+  assert(/recordingFilename/.test(pcVideo));
+  assert(/importVideo/.test(pcVideo));
+  assert(/sampleTimes/.test(pcVideo));
+  return 'record + import';
 });
 
 console.log(pass + ' pass / ' + fail + ' fail');
