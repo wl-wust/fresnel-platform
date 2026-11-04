@@ -58,6 +58,50 @@ def main():
         page.dispatch_event("#beta", "change")
         assert page.input_value("#betaRange") == "1.5"
 
+        page.check("#horizontalLock")
+        canvas_box = page.locator("#opticalCanvas").bounding_box()
+        before = page.evaluate(
+            """
+            () => {
+              const d = devices.find(item => item.type === 'screen');
+              return { x: d.x, y: d.y, w: d.width, h: d.height };
+            }
+            """
+        )
+        start_x = canvas_box["x"] + before["x"] + before["w"] / 2
+        start_y = canvas_box["y"] + before["y"] + before["h"] / 2
+        page.mouse.move(start_x, start_y)
+        page.mouse.down()
+        page.mouse.move(start_x + 70, start_y + 60, steps=8)
+        page.mouse.up()
+        locked = page.evaluate(
+            """
+            () => {
+              const d = devices.find(item => item.type === 'screen');
+              return { x: d.x, y: d.y };
+            }
+            """
+        )
+        assert abs(locked["x"] - before["x"]) > 20
+        assert abs(locked["y"] - before["y"]) < 0.01
+
+        page.uncheck("#horizontalLock")
+        free_start_x = canvas_box["x"] + locked["x"] + before["w"] / 2
+        free_start_y = canvas_box["y"] + locked["y"] + before["h"] / 2
+        page.mouse.move(free_start_x, free_start_y)
+        page.mouse.down()
+        page.mouse.move(free_start_x + 30, free_start_y + 50, steps=8)
+        page.mouse.up()
+        free = page.evaluate(
+            """
+            () => {
+              const d = devices.find(item => item.type === 'screen');
+              return { x: d.x, y: d.y };
+            }
+            """
+        )
+        assert abs(free["y"] - locked["y"]) > 20
+
         assert not errors, errors
         browser.close()
 

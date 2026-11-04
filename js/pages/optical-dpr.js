@@ -34,6 +34,10 @@
   function getDragOffset() {
     try { return typeof dragOffset !== 'undefined' ? dragOffset : { x: 0, y: 0 }; } catch (e) { return { x: 0, y: 0 }; }
   }
+  function horizontalLocked() {
+    var api = global.BP && global.BP.pages && global.BP.pages.opticalVisual;
+    return !!(api && typeof api.isHorizontalLocked === 'function' && api.isHorizontalLocked());
+  }
   function callRender() { if (typeof global.render === 'function') global.render(); }
 
   /* ---------------- 覆盖 resizeCanvas（原 41-46 行） ---------------- */
@@ -82,7 +86,9 @@
     var off = getDragOffset();
 
     sel.x = Math.max(0, Math.min(cssW - sel.width, p.x - off.x));
-    sel.y = Math.max(0, Math.min(cssH - sel.height, p.y - off.y));
+    if (!horizontalLocked()) {
+      sel.y = Math.max(0, Math.min(cssH - sel.height, p.y - off.y));
+    }
     callRender();
     if (typeof global.updateParams === 'function') global.updateParams();
     if (typeof global.simulateInterference === 'function') global.simulateInterference();
