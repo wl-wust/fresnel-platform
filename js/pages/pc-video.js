@@ -59,7 +59,8 @@
     if (saved && isFinite(saved.value) && Number(saved.value) > 0) return Number(saved.value);
     var input = $('pixel_size');
     var value = input ? parseFloat(input.value) : NaN;
-    return isFinite(value) && value > 0 ? value : 0.004;
+    return input && input.dataset.sessionManual === '1' && isFinite(value) && value > 0
+      ? value : NaN;
   }
 
   function populateRoles() {
@@ -731,6 +732,17 @@
       return;
     }
     var session = ensureSession(config.method);
+    var k = currentK();
+    if (isFinite(k) && k > 0) {
+      BP.sessions.updateSession(session.id, {
+        calibration: {
+          k_mm_px: k,
+          source: 'manual',
+          at: new Date().toISOString()
+        }
+      });
+      session = BP.sessions.getSession(session.id);
+    }
     var stats = BP.videoSampler.summary(chosen);
     var selection = {
       target: config.target,
@@ -752,7 +764,7 @@
           name: 'video-best-' + String(index + 1).padStart(2, '0') + '.jpg',
           size: item.blob.size,
           deltaXPx: item.deltaXPx,
-          deltaXmm: item.deltaXPx * currentK(),
+          deltaXmm: isFinite(k) && k > 0 ? item.deltaXPx * k : null,
           quality: item.visibility,
           source: item.source || 'live',
           sourceName: item.sourceName || '手机直播',
@@ -766,6 +778,9 @@
       clearCandidates();
       if (BP.pages && BP.pages.pc && BP.pages.pc.renderPcSession) {
         BP.pages.pc.renderPcSession();
+      }
+      if (BP.pages && BP.pages.pc && BP.pages.pc.applySessionData) {
+        BP.pages.pc.applySessionData({ silent: true, calculate: true });
       }
       setBadge(remoteStream ? '已连接' : '未连接', remoteStream ? 'live' : '');
       setStatus('已将 ' + stored + ' 个最佳帧写入“' +

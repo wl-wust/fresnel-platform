@@ -41,7 +41,7 @@
     'fitTable', 'fitResult', 'fitResiduals', 'fitChartContainer', 'fitChart',
     'uncTable', 'uncertaintyResult',
     'pathTable', 'standard_value', 'compareResult', 'compareTable',
-    'historyList', 'pcSessionSummary',
+    'historyList', 'pcSessionSummary', 'sessionDataSummary',
     'trace_d', 'trace_D', 'trace_k', 'trace_dx', 'trace_a', 'trace_A', 'trace_n',
     'tracePresetResult', 'traceResult',
     'aeff_dx_pc', 'aeff_dw_pc', 'aeff_lambda_pc', 'aeffResultPC'
@@ -378,6 +378,184 @@
     BP.ui.alert('已填入研究报告表 5.1 参数', 'ok');
   }
 
+  /* ---------------- 从当前测量会话填入 ---------------- */
+  var SESSION_FIELDS = [
+    'd_value', 'D_value', 'pixel_size', 'fringe_period_px',
+    'fringe_sodium', 'fringe_laser', 'lambda_laser', 'n_na', 'n_ref',
+    'trace_d', 'trace_D', 'trace_k', 'trace_dx',
+    'mag_dPrime', 'mag_beta', 'mag_dxNa', 'mag_D', 'mag_dxPrime',
+    'unc_d_pc', 'unc_D_pc', 'unc_fringe_pc'
+  ];
+  var FIELD_LABEL = {
+    dxNaPx: '钠光 Δx', dxRefPx: '参考光 Δx', dxNaMm: '无透镜 Δx', dxPrimeMm: '加透镜 Δx′',
+    k: '像素当量 k', d: 'd', D: 'D', lamRef: '参考波长', nNa: 'n_Na',
+    nRef: 'n_ref', dPrime: 'd′', beta: 'β', lambdaNm: '波长 λ'
+  };
+
+  function bindSessionFieldTracking() {
+    SESSION_FIELDS.forEach(function (id) {
+      var el = $(id);
+      if (!el || el.dataset.sessionTracked === '1') return;
+      el.dataset.sessionTracked = '1';
+      el.addEventListener('input', function () { el.dataset.sessionManual = '1'; });
+    });
+  }
+
+  function calibratedSession(session) {
+    var current = BP.sessions.getSession(session.id) || session;
+    if (current.calibration && isFinite(current.calibration.k_mm_px) &&
+        Number(current.calibration.k_mm_px) > 0) return current;
+    var saved = BP.store.loadK();
+    if (!saved || !isFinite(saved.value) || !(Number(saved.value) > 0)) return current;
+    BP.sessions.updateSession(current.id, {
+      calibration: {
+        k_mm_px: Number(saved.value),
+        source: saved.source || 'manual',
+        L_mm: saved.L,
+        N_px: saved.N,
+        at: new Date().toISOString()
+      }
+    });
+    return BP.sessions.getSession(current.id);
+  }
+
+  function assignSessionValue(id, value, force, skipped) {
+    var el = $(id);
+    if (!el || !isFinite(value)) return;
+    if (!force && el.dataset.sessionManual === '1') {
+      if (skipped && skipped.indexOf(id) < 0) skipped.push(id);
+      return;
+    }
+    el.value = Number(value);
+    el.dataset.sessionAuto = '1';
+    delete el.dataset.sessionManual;
+  }
+
+  function applySessionValues(data, force) {
+    var v = data.values;
+    var skipped = [];
+    if (data.method === 'basic') {
+      assignSessionValue('d_value', v.d, force, skipped);
+      assignSessionValue('D_value', v.D, force, skipped);
+      assignSessionValue('pixel_size', v.k, force, skipped);
+      assignSessionValue('fringe_period_px', v.dxNaPx, force, skipped);
+      assignSessionValue('unc_d_pc', v.d, force, skipped);
+      assignSessionValue('unc_D_pc', v.D, force, skipped);
+      assignSessionValue('unc_fringe_pc', v.dxNaPx, force, skipped);
+    } else if (data.method === 'ratio') {
+      assignSessionValue('fringe_sodium', v.dxNaPx, force, skipped);
+      assignSessionValue('fringe_laser', v.dxRefPx, force, skipped);
+      assignSessionValue('lambda_laser', v.lamRef, force, skipped);
+      assignSessionValue('n_na', v.nNa, force, skipped);
+      assignSessionValue('n_ref', v.nRef, force, skipped);
+    } else if (data.method === 'magnification') {
+      assignSessionValue('mag_dPrime', v.dPrime, force, skipped);
+      assignSessionValue('mag_beta', v.beta, force, skipped);
+      assignSessionValue('mag_dxNa', v.dxNaMm, force, skipped);
+      assignSessionValue('mag_D', v.D, force, skipped);
+      assignSessionValue('mag_dxPrime', v.dxPrimeMm, force, skipped);
+    } else if (data.method === 'trace') {
+      assignSessionValue('trace_d', v.d, force, skipped);
+      assignSessionValue('trace_D', v.D, force, skipped);
+      assignSessionValue('trace_k', v.k, force, skipped);
+      assignSessionValue('trace_dx', v.dxNaPx, force, skipped);
+    }
+    return skipped;
+  }
+
+  function formatSessionValue(key, value) {
+    if (!isFinite(value)) return '—';
+    if (key === 'k') return F.sci(value) + ' mm/px';
+    if (key.indexOf('dxNaPx') >= 0 || key.indexOf('dxRefPx') >= 0) return F.px(value) + ' px';
+    if (key.indexOf('Mm') >= 0 || key === 'd' || key === 'D' || key === 'dPrime') return F.mm(value) + ' mm';
+    if (key === 'lambdaNm') return F.lam(value);
+    return F.num(value, 6);
+  }
+
+  function renderSessionDataSummary(data, skipped) {
+    var host = $('sessionDataSummary');
+    if (!host) return;
+    var keysByMethod = {
+      basic: ['dxNaPx', 'k', 'd', 'D', 'lambdaNm'],
+      ratio: ['dxNaPx', 'dxRefPx', 'lamRef', 'nNa', 'nRef', 'lambdaNm'],
+      magnification: ['dxNaMm', 'dxPrimeMm', 'dPrime', 'beta', 'D', 'lambdaNm'],
+      trace: ['dxNaPx', 'k', 'd', 'D', 'lambdaNm']
+    };
+    var rows = [
+      { label: '当前方法', value: data.label, cls: 'is-key' },
+      { label: '数据状态', value: data.complete ? '核心参数已齐全' : '仍有缺失项',
+        cls: data.complete ? 'is-key' : 'is-warn' }
+    ];
+    (keysByMethod[data.method] || []).forEach(function (key) {
+      var value = data.values[key];
+      var source = data.sources[key] || '缺失';
+      var detail = data.sourceDetails[key];
+      rows.push({
+        label: FIELD_LABEL[key] || key,
+        value: formatSessionValue(key, value),
+        cls: isFinite(value) ? '' : 'is-warn',
+        note: '来源：' + source + (detail ? '｜' + detail : '')
+      });
+    });
+    var lambda = data.stats && data.stats.lambda;
+    if (lambda && lambda.n) {
+      rows.push({
+        label: '多帧波长统计',
+        value: lambda.single ? F.lam(lambda.meanNm) : F.lam(lambda.meanNm),
+        note: lambda.single
+          ? '仅 1 帧，A 类不确定度需至少 2 帧'
+          : 'n=' + lambda.n + '，帧间 s=' + F.num(lambda.sdNm, 3) +
+            ' nm，u_A=' + F.num(lambda.uANm, 3) + ' nm'
+      });
+    }
+    if (data.missing.length) {
+      rows.push({
+        label: '缺失提示',
+        value: data.missing.map(function (item) { return item.label; }).join('、'),
+        cls: 'is-warn',
+        note: data.missing.map(function (item) { return item.label + '：' + item.reason; }).join('；')
+      });
+    }
+    if (skipped.length) {
+      rows.push({
+        label: '保留手工值',
+        value: skipped.join('、'),
+        note: '初次自动填入不会覆盖你主动改过的输入框；点“从当前会话填入”可强制刷新。'
+      });
+    }
+    BP.ui.result(host, rows, { caption: '会话数据来源与多帧统计' });
+  }
+
+  function recalculateCurrentMethod(method) {
+    if (method === 'basic') calcWavelength();
+    else if (method === 'ratio') calcRatioMethod();
+    else if (method === 'magnification') calcMagnificationMethod();
+    else if (method === 'trace') calcTraceMethod();
+  }
+
+  function fillSessionData(options) {
+    options = options || {};
+    try {
+      if (!BP.sessionData) throw new Error('会话数据模块未加载');
+      var session = BP.sessions.getActiveSession();
+      if (!session) throw new Error('暂无测量会话；请先在手机端新建会话或导入记录');
+      session = calibratedSession(session);
+      var data = BP.sessionData.build(session);
+      var skipped = applySessionValues(data, !!options.force);
+      renderSessionDataSummary(data, skipped);
+      renderPcSession();
+      if (data.complete && options.calculate !== false) recalculateCurrentMethod(data.method);
+      if (!options.silent) {
+        BP.ui.alert(data.complete ? '已从当前会话填入并重新计算' : '已填入可用数据，缺失项见来源摘要',
+          data.complete ? 'ok' : 'info');
+      }
+      return data;
+    } catch (e) {
+      if (!options.silent) fail(e);
+      return null;
+    }
+  }
+
   function fillReportPaths() {
     var names = ['比值法', '横向放大率法', '光线追迹法'];
     var vals = [[589.33, 0.61], [589.28, 0.84], [589.30, 0.78]];
@@ -484,6 +662,8 @@
     calcUncertaintyTable: calcUncertaintyTable, addUncRow: addUncRow, removeUncRow: removeUncRow,
     comparePathsTable: comparePathsTable, addPathRow: addPathRow, removePathRow: removePathRow,
     fillReportParams: fillReportParams, fillReportPaths: fillReportPaths,
+    fillSessionData: function () { return fillSessionData({ force: true }); },
+    applySessionData: fillSessionData,
     clearHistory: clearHistory, exportHistory: exportHistory, renderHistory: renderHistory,
     renderPcSession: renderPcSession
   };
@@ -491,8 +671,10 @@
 
   if (doc) {
     if (doc.readyState === 'loading') {
-      doc.addEventListener('DOMContentLoaded', function () { bindTabs(); renderHistory(); renderPcSession(); });
-    } else { bindTabs(); renderHistory(); renderPcSession(); }
+      doc.addEventListener('DOMContentLoaded', function () {
+        bindTabs(); bindSessionFieldTracking(); renderHistory(); renderPcSession();
+      });
+    } else { bindTabs(); bindSessionFieldTracking(); renderHistory(); renderPcSession(); }
   }
 
   BP.pages = BP.pages || {};

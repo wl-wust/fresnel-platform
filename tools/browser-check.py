@@ -30,6 +30,60 @@ def main():
             })
 
         page.click('.tab[data-tab="wavelength"]')
+        auto_fill = page.evaluate("""
+          async () => {
+            const cases = [
+              {
+                method: 'basic',
+                params: { d: 0.90213, D: 1000 },
+                roles: { sodium: [163.2, 163.4] }
+              },
+              {
+                method: 'ratio',
+                params: { lamRef: 650, nNa: 1.5168, nRef: 1.5145 },
+                roles: { sodium: [163.3, 163.4], reference: [180.8, 181.0] }
+              },
+              {
+                method: 'magnification',
+                params: { dPrime: 3.969, beta: 4.4, D: 1000 },
+                roles: { no_lens: [0.65332, 0.6535], with_lens: [2.8746, 2.8750] }
+              },
+              {
+                method: 'trace',
+                params: { D: 1000 },
+                roles: { sodium: [163.2, 163.4] }
+              }
+            ];
+            const out = [];
+            for (const item of cases) {
+              const session = BP.sessions.createSession({
+                method: item.method,
+                title: 'auto-fill-' + item.method,
+                calibration: { k_mm_px: 0.004, source: 'L/N' },
+                params: item.params
+              });
+              for (const [role, values] of Object.entries(item.roles)) {
+                for (const value of values) {
+                  await BP.sessions.addFrame(session.id, {
+                    role,
+                    deltaXPx: value <= 5 ? value / 0.004 : value,
+                    deltaXmm: value <= 5 ? value : value * 0.004
+                  });
+                }
+              }
+              BP.sessions.setActiveSession(session.id);
+              const data = fillSessionData();
+              out.push({
+                method: item.method,
+                complete: data.complete,
+                lambdaNm: data.values.lambdaNm,
+                summary: document.getElementById('sessionDataSummary').innerText
+              });
+            }
+            return out;
+          }
+        """)
+        page.click('.tab[data-tab="wavelength"]')
         page.click('button[onclick="fillTracePreset()"]')
         page.click('button[onclick="calcTraceMethod()"]')
         trace_calc = page.locator("#traceResult").inner_text()
@@ -42,6 +96,7 @@ def main():
         aeff_text = page.locator("#aeffResultPC").inner_text()
         result["pc"] = {
             "tabs": pc_results,
+            "auto_fill": auto_fill,
             "trace": trace_text,
             "trace_calc": trace_calc,
             "magnification": mag_calc,
@@ -83,6 +138,32 @@ def main():
         role_text = page.locator("#roleStatus").inner_text()
 
         page.click('.tab-btn[data-tab="analysis"]')
+        mobile_auto_fill = page.evaluate("""
+          async () => {
+            const session = BP.sessions.createSession({
+              method: 'basic',
+              title: 'mobile-auto-fill',
+              calibration: { k_mm_px: 0.004, source: 'L/N' },
+              params: { d: 0.90213, D: 1000 },
+              paramsSources: { d: '报告预设', D: '报告预设' }
+            });
+            for (let i = 0; i < 2; i += 1) {
+              await BP.sessions.addFrame(session.id, {
+                role: 'sodium',
+                deltaXPx: 163.3 + i * 0.2,
+                deltaXmm: (163.3 + i * 0.2) * 0.004
+              });
+            }
+            BP.sessions.setActiveSession(session.id);
+            const data = fillSessionData();
+            return {
+              complete: data.complete,
+              lambdaNm: data.values.lambdaNm,
+              dxInput: document.querySelector('#dataTableBody .m-dx').value,
+              summary: document.getElementById('sessionDataSummary').innerText
+            };
+          }
+        """)
         page.fill("#aeff_dx", "0.5")
         page.fill("#aeff_dw", "-25")
         page.click('button[onclick="calcAeff()"]')
@@ -92,6 +173,7 @@ def main():
             "tabs": mobile_results,
             "frames_after_reload": frame_count,
             "role_status": role_text,
+            "auto_fill": mobile_auto_fill,
             "aeff": mobile_aeff,
         }
         result["errors"] = errors
@@ -106,6 +188,12 @@ def main():
         raise SystemExit(3)
     if result["mobile"]["frames_after_reload"] != 3:
         raise SystemExit(4)
+    if not all(item["complete"] for item in result["pc"]["auto_fill"]):
+        raise SystemExit(5)
+    if not result["mobile"]["auto_fill"]["complete"]:
+        raise SystemExit(6)
+    if abs(float(result["mobile"]["auto_fill"]["dxInput"]) - 163.4) > 0.01:
+        raise SystemExit(7)
 
 
 if __name__ == "__main__":

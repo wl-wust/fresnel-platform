@@ -14,11 +14,11 @@ const fs = require('fs');
 const path = require('path');
 
 // 每页应出现的 ?v= 处数（= 该页所有 <script src> + <link href> 的数量）
-// index  : 2 css + 17 script
-// mobile : 2 css + 10 script
+// index  : 2 css + 18 script
+// mobile : 2 css + 11 script
 // optical: 2 css + 10 script（含 P7 的 optical-rail.js）
 // 404    : 1 css
-const EXPECT = { 'index.html': 19, 'mobile.html': 12, 'optical.html': 12, '404.html': 1 };
+const EXPECT = { 'index.html': 20, 'mobile.html': 13, 'optical.html': 12, '404.html': 1 };
 
 function findRepo(start) {
   let d = path.resolve(start);

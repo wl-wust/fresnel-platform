@@ -26,7 +26,7 @@
     if (saved && isFinite(saved.value) && saved.value > 0) return saved.value;
     var el = $('pixel_size');
     var v = el ? parseFloat(el.value) : NaN;
-    return isFinite(v) && v > 0 ? v : 0.0040;
+    return el && el.dataset.sessionManual === '1' && isFinite(v) && v > 0 ? v : NaN;
   }
 
   function loadProfilePlot(profile, r) {
@@ -72,6 +72,16 @@
       if (BP.sessions) {
         var session = BP.sessions.getActiveSession();
         if (!session) session = BP.sessions.createSession({ method: 'basic', title: 'PC 图像分析' });
+        if (isFinite(k) && k > 0) {
+          BP.sessions.updateSession(session.id, {
+            calibration: {
+              k_mm_px: k,
+              source: 'manual',
+              at: new Date().toISOString()
+            }
+          });
+          session = BP.sessions.getSession(session.id);
+        }
         var roleEl = $('pcRoleSelect');
         var role = roleEl && roleEl.value ? roleEl.value : 'sodium';
         BP.sessions.addFrame(session.id, {
@@ -95,6 +105,9 @@
         }).then(function () {
           if (BP.pages && BP.pages.pc && BP.pages.pc.renderPcSession) {
             BP.pages.pc.renderPcSession();
+          }
+          if (BP.pages && BP.pages.pc && BP.pages.pc.applySessionData) {
+            BP.pages.pc.applySessionData({ silent: true, calculate: true });
           }
         }).catch(fail);
       }
@@ -142,6 +155,9 @@
         }
         BP.ui.result($('phoneRecordResult'), rows, { caption: '手机会话与角色数据已导入' });
         if (BP.pages && BP.pages.pc && BP.pages.pc.renderPcSession) BP.pages.pc.renderPcSession();
+        if (BP.pages && BP.pages.pc && BP.pages.pc.applySessionData) {
+          BP.pages.pc.applySessionData({ silent: true, calculate: true });
+        }
         return;
       }
       var d = rec.params && isFinite(rec.params.d) ? rec.params.d : 0.90213;

@@ -77,6 +77,9 @@ if (fs.existsSync(idxPath)) {
   check('首页加载 core/fringe.js', /core\/fringe\.js/.test(idx));
   const iPlot = idx.indexOf('core/plot.js'), iFringe = idx.indexOf('core/fringe.js');
   check('core/fringe.js 在 plot.js 之后', iFringe > iPlot && iPlot >= 0, 'plot@' + iPlot + ' fringe@' + iFringe);
+  const iSessions = idx.indexOf('core/sessions.js'), iSessionData = idx.indexOf('core/session-data.js');
+  check('首页在会话模块之后加载 session-data.js',
+        iSessionData > iSessions && iSessions >= 0, 'sessions@' + iSessions + ' data@' + iSessionData);
   const iPc = idx.indexOf('pages/pc.js'), iPcF = idx.indexOf('pages/pc-fringe.js');
   check('pages/pc-fringe.js 在 pc.js 之后', iPcF > iPc && iPc >= 0, 'pc@' + iPc + ' pc-fringe@' + iPcF);
   check('首页有「内含自检」与「导入手机记录」按钮',
@@ -84,6 +87,8 @@ if (fs.existsSync(idxPath)) {
   check('P5 容器齐全（fringeSelfTestResult / phoneRecordFile / phoneRecordResult）',
         ['fringeSelfTestResult', 'phoneRecordFile', 'phoneRecordResult']
           .every(id => new RegExp('\\sid="' + id + '"').test(idx)));
+  check('PC 端提供「从当前会话填入」按钮与来源摘要',
+        /onclick="fillSessionData\(\)"/.test(idx) && /\sid="sessionDataSummary"/.test(idx));
 } else {
   check('存在 index.html', false);
 }
@@ -95,6 +100,11 @@ if (fs.existsSync(mobilePath)) {
         /分划板刻线自动标定/.test(mobile) && /onclick="detectReticle\(\)"/.test(mobile));
   check('手机端保留手点兜底说明',
         /手点两条刻线兜底/.test(mobile) && /不受高度影响/.test(mobile));
+  const mSessions = mobile.indexOf('core/sessions.js'), mSessionData = mobile.indexOf('core/session-data.js');
+  check('手机端在会话模块之后加载 session-data.js',
+        mSessionData > mSessions && mSessions >= 0, 'sessions@' + mSessions + ' data@' + mSessionData);
+  check('手机端提供「从当前会话填入」按钮与来源摘要',
+        /onclick="fillSessionData\(\)"/.test(mobile) && /\sid="sessionDataSummary"/.test(mobile));
 } else {
   check('存在 mobile.html', false);
 }

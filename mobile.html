@@ -138,6 +138,12 @@
   <!-- ================= 分析 ================= -->
   <div id="analysis" class="tab-page">
     <h3>快速校验</h3>
+    <div class="compare-section">
+      <h4>当前会话自动填入</h4>
+      <p class="hint">按当前测量方法读取已识别帧；缺项会列出原因，不会用固定值冒充测量值。</p>
+      <button class="btn-calc" onclick="fillSessionData()">从当前会话填入</button>
+      <div id="sessionDataSummary" class="result-box" style="display:none"></div>
+    </div>
     <div class="data-table-container">
       <table class="data-table">
         <thead><tr><th>序号</th><th>d (mm)</th><th>D (mm)</th><th>Δx (px)</th><th>λ (nm)</th><th>操作</th></tr></thead>
@@ -239,6 +245,7 @@
 <script src="js/core/nbk7.js?v=2c36064"></script>
 <script src="js/core/sessions.js?v=2c36064"></script>
 <script src="js/core/fringe.js?v=2c36064"></script>
+<script src="js/core/session-data.js?v=2c36064"></script>
 <script src="js/pages/mobile.js?v=2c36064"></script>
 <script src="vendor/peerjs.min.js?v=2c36064"></script>
 <script src="js/pages/mobile-stream.js?v=2c36064"></script>

@@ -25,7 +25,7 @@
              'cal_k', 'cal_L', 'cal_N', 'calResult',
              'reticleFile', 'reticleCanvas', 'retPix', 'retL', 'retResult', 'currentK',
              'dataTableBody', 'uncInputs', 'uncResult',
-             'combineBody', 'combineResult', 'recordFile', 'recordResult'];
+             'combineBody', 'combineResult', 'recordFile', 'recordResult', 'sessionDataSummary'];
 
   var REPORT = { d: 0.90213, D: 1000, k: 0.0040, nNa: 1.5168, nRef: 1.5145 };
   // 三条路径共用同一批 Δx（报告 8.2）；表 8.1 的 u(Δx)/Δx
@@ -67,6 +67,11 @@
   function syncParamsToSession() {
     var session = activeSession();
     if (!session || !S()) return;
+    var dEl = $('param_d'), DEl = $('param_D');
+    function inputSource(el, fallback) {
+      if (el && el.dataset.sessionManual === '1') return '手动输入';
+      return fallback;
+    }
     BP.sessions.updateSession(session.id, {
       params: {
         d: num('param_d', REPORT.d),
@@ -77,6 +82,13 @@
         nRef: REPORT.nRef,
         b: 0.08,
         lamRef: 650
+      },
+      paramsSources: {
+        d: inputSource(dEl, '报告预设'),
+        D: inputSource(DEl, '报告预设'),
+        lamRef: '报告预设',
+        nNa: '报告预设',
+        nRef: '报告预设'
       }
     });
   }
@@ -230,10 +242,14 @@
       toggle.addEventListener('click', function () {
         S().setFrameExcluded(session.id, frame.id, !frame.excluded);
         renderAllSessionUI();
+        applySessionData({ silent: true });
       });
       var remove = el('button', 'btn-mini btn-danger', '删除');
       remove.addEventListener('click', function () {
-        S().removeFrame(session.id, frame.id).then(renderAllSessionUI).catch(fail);
+        S().removeFrame(session.id, frame.id).then(function () {
+          renderAllSessionUI();
+          applySessionData({ silent: true });
+        }).catch(fail);
       });
       actions.appendChild(toggle);
       actions.appendChild(remove);
@@ -250,6 +266,130 @@
     renderFrameGallery();
   }
 
+  /* ---------------- 当前会话数据自动填入 ---------------- */
+  var SESSION_FIELD_LABEL = {
+    dxNaPx: '钠光 Δx', dxRefPx: '参考光 Δx', dxNaMm: '无透镜 Δx', dxPrimeMm: '加透镜 Δx′',
+    k: '像素当量 k', d: 'd', D: 'D', lamRef: '参考波长', nNa: 'n_Na',
+    nRef: 'n_ref', dPrime: 'd′', beta: 'β', lambdaNm: '波长 λ'
+  };
+
+  function mobileCalibratedSession(session) {
+    var current = S().getSession(session.id) || session;
+    if (current.calibration && isFinite(current.calibration.k_mm_px) &&
+        Number(current.calibration.k_mm_px) > 0) return current;
+    var saved = BP.store.loadK();
+    if (!saved || !isFinite(saved.value) || !(Number(saved.value) > 0)) return current;
+    S().updateSession(current.id, {
+      calibration: {
+        k_mm_px: Number(saved.value),
+        source: saved.source || 'manual',
+        L_mm: saved.L,
+        N_px: saved.N,
+        at: new Date().toISOString()
+      }
+    });
+    return S().getSession(current.id);
+  }
+
+  function mobileSessionValue(key, value) {
+    if (!isFinite(value)) return '—';
+    if (key === 'k') return F.sci(value) + ' mm/px';
+    if (key === 'dxNaPx' || key === 'dxRefPx') return F.px(value) + ' px';
+    if (key === 'dxNaMm' || key === 'dxPrimeMm' || key === 'd' || key === 'D' || key === 'dPrime') {
+      return F.mm(value) + ' mm';
+    }
+    if (key === 'lambdaNm') return F.lam(value);
+    return F.num(value, 6);
+  }
+
+  function renderMobileSessionDataSummary(data) {
+    var host = $('sessionDataSummary');
+    if (!host) return;
+    var keysByMethod = {
+      basic: ['dxNaPx', 'k', 'd', 'D', 'lambdaNm'],
+      ratio: ['dxNaPx', 'dxRefPx', 'lamRef', 'nNa', 'nRef', 'lambdaNm'],
+      magnification: ['dxNaMm', 'dxPrimeMm', 'dPrime', 'beta', 'D', 'lambdaNm'],
+      trace: ['dxNaPx', 'k', 'd', 'D', 'lambdaNm']
+    };
+    var rows = [
+      { label: '当前方法', value: data.label, cls: 'is-key' },
+      { label: '数据状态', value: data.complete ? '核心参数已齐全' : '仍有缺失项',
+        cls: data.complete ? 'is-key' : 'is-warn' }
+    ];
+    (keysByMethod[data.method] || []).forEach(function (key) {
+      rows.push({
+        label: SESSION_FIELD_LABEL[key] || key,
+        value: mobileSessionValue(key, data.values[key]),
+        cls: isFinite(data.values[key]) ? '' : 'is-warn',
+        note: '来源：' + (data.sources[key] || '缺失') +
+          (data.sourceDetails[key] ? '｜' + data.sourceDetails[key] : '')
+      });
+    });
+    var lambda = data.stats && data.stats.lambda;
+    if (lambda && lambda.n) {
+      rows.push({
+        label: '多帧波长统计',
+        value: F.lam(lambda.meanNm),
+        note: lambda.single ? '仅 1 帧，A 类不确定度需至少 2 帧' :
+          'n=' + lambda.n + '，帧间 s=' + F.num(lambda.sdNm, 3) +
+          ' nm，u_A=' + F.num(lambda.uANm, 3) + ' nm'
+      });
+    }
+    if (data.missing.length) {
+      rows.push({
+        label: '缺失提示',
+        value: data.missing.map(function (item) { return item.label; }).join('、'),
+        cls: 'is-warn',
+        note: data.missing.map(function (item) {
+          return item.label + '：' + item.reason;
+        }).join('；')
+      });
+    }
+    BP.ui.result(host, rows, { caption: '来自当前测量会话，不覆盖缺失项' });
+    show('sessionDataSummary', true);
+  }
+
+  function applyBasicSessionTable(data, force) {
+    if (data.method !== 'basic' && data.method !== 'trace') return;
+    var tb = $('dataTableBody');
+    if (!tb) return;
+    if (!force && tb.dataset.sessionManual === '1') return;
+    if (!isFinite(data.values.dxNaPx) || !isFinite(data.values.d) || !isFinite(data.values.D)) return;
+    BP.ui.clear(tb);
+    var tr = addRow(data.values.d, data.values.D);
+    tr.querySelector('.m-dx').value = data.values.dxNaPx;
+    if (isFinite(data.values.lambdaNm)) {
+      tr.querySelector('.m-lam').textContent = F.lam(data.values.lambdaNm);
+    }
+    delete tb.dataset.sessionManual;
+    tb.dataset.sessionAuto = '1';
+  }
+
+  function applySessionData(options) {
+    options = options || {};
+    try {
+      if (!BP.sessionData) throw new Error('会话数据模块未加载');
+      var session = activeSession();
+      if (!session) throw new Error('暂无测量会话');
+      session = mobileCalibratedSession(session);
+      var data = BP.sessionData.build(session);
+      applyBasicSessionTable(data, !!options.force);
+      renderMobileSessionDataSummary(data);
+      if (!options.silent) {
+        BP.ui.alert(data.complete ? '已从当前会话填入分析页' : '已填入可用数据，缺失项见来源摘要',
+          data.complete ? 'ok' : 'info');
+      }
+      return data;
+    } catch (e) {
+      if (!options.silent) fail(e);
+      return null;
+    }
+  }
+
+  function fillSessionData() {
+    return applySessionData({ force: true });
+  }
+
   function createSessionFromUI() {
     try {
       var method = $('methodSelect') ? $('methodSelect').value : 'ratio';
@@ -258,6 +398,7 @@
         title: '现场采集'
       });
       renderAllSessionUI();
+      applySessionData({ silent: true });
       BP.ui.alert('已新建' + methodLabel(method) + '会话', 'ok');
     } catch (e) { fail(e); }
   }
@@ -267,6 +408,7 @@
     if (!sel) return;
     S().setActiveSession(sel.value);
     renderAllSessionUI();
+    applySessionData({ silent: true });
   }
 
   function onRoleChange() {
@@ -279,7 +421,7 @@
     syncParamsToSession();
     var role = $('roleSelect') ? $('roleSelect').value : 'sodium';
     var k = BP.store.loadK();
-    var kv = k && isFinite(k.value) && k.value > 0 ? k.value : 0.004;
+    var kv = k && isFinite(k.value) && k.value > 0 ? Number(k.value) : null;
     BP.ui.loading(true);
     var analysisPromise = BP.fringe && BP.fringe.analyzeFile
       ? BP.fringe.analyzeFile(file, { k: kv })
@@ -308,13 +450,15 @@
         var dev = r.axis === 'x'
           ? Math.abs(r.stripeAngleDeg - 90)
           : (r.axis === 'y' ? Math.min(r.stripeAngleDeg, 180 - r.stripeAngleDeg) : NaN);
+        var mmText = isFinite(r.deltaXmm) ? r.deltaXmm.toFixed(4) + ' mm' : '未标定 k';
         showPreview(file,
           '已加入 ' + (S().ROLE_LABEL[role] || role) +
           ' · Δx=' + r.periodPx.toFixed(2) + ' px ' +
-          '(' + r.deltaXmm.toFixed(4) + ' mm)' +
+          '(' + mmText + ')' +
           ' · ' + (r.axis === 'oblique' ? '斜条纹 ' + r.stripeAngleDeg.toFixed(1) + '°'
                                           : '倾角 ' + dev.toFixed(1) + '°'));
         renderAllSessionUI();
+        applySessionData({ silent: true });
         return frame;
       });
     }).catch(function (e) {
@@ -327,6 +471,7 @@
       }).then(function () {
         showPreview(file, '已保存，但识别失败：' + e.message);
         renderAllSessionUI();
+        applySessionData({ silent: true });
       });
     }).then(function () {
       BP.ui.loading(false);
@@ -841,6 +986,7 @@
       var r = b.closest('tr'); if (r) r.parentNode.removeChild(r); renumber();
     })));
     tb.appendChild(tr);
+    return tr;
   }
   function renumber() {
     var tb = $('dataTableBody');
@@ -1024,6 +1170,7 @@
       if (rec.schema === 'bp.record/2' && BP.sessions) {
         BP.sessions.importRecord(rec);
         renderAllSessionUI();
+        applySessionData({ silent: true });
         show('recordResult', true);
         BP.ui.result($('recordResult'), [
           { label: '已导入记录', value: 'bp.record/2', cls: 'is-key' },
@@ -1086,7 +1233,8 @@
     addUncInput: addUncInput, calcUncertainty: calcUncertainty,
     addCombineRow: addCombineRow, calcWeightedCombine: calcWeightedCombine, fillReportPaths: fillReportPaths,
     exportRecord: exportRecord, importRecord: importRecord, analyzeImage: analyzeImage,
-    createSessionFromUI: createSessionFromUI, calcAeff: calcAeff
+    createSessionFromUI: createSessionFromUI, calcAeff: calcAeff,
+    fillSessionData: fillSessionData, applySessionData: applySessionData
   };
   for (var k2 in API) if (Object.prototype.hasOwnProperty.call(API, k2)) global[k2] = API[k2];
 
@@ -1099,6 +1247,14 @@
     var cv = $('reticleCanvas');
     if (cv) cv.addEventListener('click', onReticleClick);
     var dv = $('video'); if (dv) dv.muted = true;
+    var dataBody = $('dataTableBody');
+    if (dataBody) {
+      dataBody.addEventListener('input', function () { dataBody.dataset.sessionManual = '1'; });
+    }
+    ['param_d', 'param_D'].forEach(function (id) {
+      var field = $(id);
+      if (field) field.addEventListener('input', function () { field.dataset.sessionManual = '1'; });
+    });
     if (BP.sessions && !BP.sessions.listSessions().length) {
       BP.sessions.createSession({ method: 'ratio', title: '现场采集' });
     }

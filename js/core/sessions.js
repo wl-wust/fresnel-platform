@@ -73,6 +73,9 @@
   }
   function now() { return new Date().toISOString(); }
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
+  function numericOrNull(value) {
+    return value !== null && value !== '' && isFinite(value) ? Number(value) : null;
+  }
 
   function openDB() {
     return new Promise(function (resolve, reject) {
@@ -164,6 +167,7 @@
       created: now(),
       calibration: options.calibration || null,
       params: options.params || {},
+      paramsSources: options.paramsSources || {},
       trace: method === 'trace' ? clone(TRACE_PRESET) : null,
       frames: []
     };
@@ -199,13 +203,13 @@
       created: now(),
       name: frame.name || '',
       size: frame.size || 0,
-      deltaXPx: isFinite(frame.deltaXPx) ? Number(frame.deltaXPx) : null,
-      deltaXmm: isFinite(frame.deltaXmm) ? Number(frame.deltaXmm) : null,
-      quality: isFinite(frame.quality) ? Number(frame.quality) : null,
+      deltaXPx: numericOrNull(frame.deltaXPx),
+      deltaXmm: numericOrNull(frame.deltaXmm),
+      quality: numericOrNull(frame.quality),
       source: frame.source || '',
       sourceName: frame.sourceName || '',
-      capturedAt: isFinite(frame.capturedAt) ? Number(frame.capturedAt) : null,
-      qualityScore: isFinite(frame.qualityScore) ? Number(frame.qualityScore) : null,
+      capturedAt: numericOrNull(frame.capturedAt),
+      qualityScore: numericOrNull(frame.qualityScore),
       selection: frame.selection || null,
       excluded: false,
       analysis: frame.analysis || null,
@@ -249,7 +253,7 @@
 
   function roleStats(sessionId, role) {
     var frames = listFrames(sessionId, role).filter(function (f) {
-      return !f.excluded && isFinite(f.deltaXPx);
+      return !f.excluded && f.deltaXPx !== null && isFinite(f.deltaXPx);
     });
     var values = frames.map(function (f) { return Number(f.deltaXPx); });
     var mean = values.reduce(function (a, b) { return a + b; }, 0) / (values.length || 1);

@@ -29,6 +29,12 @@ function check(name, fn) {
   });
   await S.addFrame(ratio.id, { role: 'sodium', deltaXPx: 163.5 });
   await S.addFrame(ratio.id, { role: 'reference', deltaXPx: 180.9 });
+  const emptyFrame = await S.addFrame(ratio.id, {
+    role: 'reference',
+    deltaXPx: null,
+    deltaXmm: null,
+    quality: null
+  });
 
   check('比值法角色定义', () => {
     assert.deepStrictEqual(S.requiredRoles('ratio'), ['sodium', 'reference']);
@@ -45,6 +51,11 @@ function check(name, fn) {
     assert.strictEqual(videoFrame.qualityScore, 0.86);
     assert.strictEqual(videoFrame.selection.target, 20);
     return videoFrame.source + ' / ' + videoFrame.qualityScore;
+  });
+  check('空测量值保存为 null 而不是 0', () => {
+    assert.strictEqual(emptyFrame.deltaXPx, null);
+    assert.strictEqual(emptyFrame.deltaXmm, null);
+    assert.strictEqual(emptyFrame.quality, null);
   });
   check('角色统计隔离', () => {
     const sodium = S.roleStats(ratio.id, 'sodium');
