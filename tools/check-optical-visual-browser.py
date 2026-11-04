@@ -53,34 +53,8 @@ def main():
         assert page.locator("#horizontalLock").count() == 1
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
-        # COMSOL 预计算视图：三张图须真实加载，参数变化须出现口径提醒。
-        page.click('[data-optical-mode="comsol"]')
-        assert page.locator("#comsolView").is_visible()
-        assert not page.locator("#opticalCanvas").is_visible()
-        for figure in (
-            "comsolFigureSetup",
-            "comsolFigure2d",
-            "comsolFigurePath",
-        ):
-            page.click(f'[data-comsol-figure="{figure}"]')
-            page.wait_for_function(
-                "id => { const img = document.getElementById(id);"
-                " return img.complete && img.naturalWidth > 0; }",
-                arg=figure,
-            )
-            assert page.locator("#comsolOpenOriginal").get_attribute("href").endswith(
-                page.locator("#" + figure).get_attribute("src")
-            )
-        assert page.locator("#comsolParamNotice").is_hidden()
-        page.fill("#lambda", "650")
-        page.dispatch_event("#lambda", "change")
-        assert page.locator("#comsolParamNotice").is_visible()
-        assert page.locator("#comsolMatch").inner_text() == "参数已偏离基准"
-        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-        page.click('[data-optical-mode="teaching"]')
-        assert page.locator("#opticalCanvas").is_visible()
-        page.fill("#lambda", "589.3")
-        page.dispatch_event("#lambda", "change")
+        assert page.locator("#comsolView").count() == 0
+        assert page.locator('[data-optical-mode]').count() == 0
 
         initial_d = page.locator("#result_d").inner_text()
         page.select_option("#sourceMode", "laser")
@@ -161,7 +135,7 @@ def main():
         assert reduced_pixels > 100
         reduced_page.close()
 
-        # 手机端 COMSOL 图完整缩放，页面与视图内部都不得横向溢出。
+        # 手机端保持纯教学画布，页面不得横向溢出。
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         mobile.on("pageerror", lambda exc: errors.append("mobile: " + str(exc)))
         mobile.on(
@@ -171,34 +145,24 @@ def main():
             else None,
         )
         mobile.goto(BASE + "/optical.html", wait_until="networkidle")
-        mobile.wait_for_function("window.BP?.pages?.opticalComsol")
-        mobile.click('[data-optical-mode="comsol"]')
-        mobile.wait_for_function(
-            "() => { const img = document.getElementById('comsolFigureSetup');"
-            " return img.complete && img.naturalWidth > 0; }"
-        )
+        mobile.wait_for_function("window.BP?.pages?.opticalVisual")
         mobile_state = mobile.evaluate(
             """
             () => {
-              const img = document.getElementById('comsolFigureSetup');
-              const view = document.getElementById('comsolView');
-              const figure = img.closest('.comsol-figure-panel').getBoundingClientRect();
+              const canvas = document.getElementById('opticalCanvas');
               return {
                 pageOverflow: document.documentElement.scrollWidth > window.innerWidth,
-                viewOverflow: view.scrollWidth > view.clientWidth,
-                imageWidth: img.getBoundingClientRect().width,
-                figureRight: figure.right,
-                innerWidth: window.innerWidth,
-                metricsVisible: document.querySelector('.comsol-metrics').getBoundingClientRect().height > 0
+                canvasWidth: canvas.getBoundingClientRect().width,
+                canvasVisible: canvas.getBoundingClientRect().height > 0,
+                comsolScriptLoaded: !!(window.BP?.pages?.opticalComsol)
               };
             }
             """
         )
         assert mobile_state["pageOverflow"] is False, mobile_state
-        assert mobile_state["viewOverflow"] is False, mobile_state
-        assert mobile_state["imageWidth"] > 250, mobile_state
-        assert mobile_state["figureRight"] <= mobile_state["innerWidth"] + 0.5, mobile_state
-        assert mobile_state["metricsVisible"] is True, mobile_state
+        assert mobile_state["canvasWidth"] > 300, mobile_state
+        assert mobile_state["canvasVisible"] is True, mobile_state
+        assert mobile_state["comsolScriptLoaded"] is False, mobile_state
         mobile.close()
 
         assert not errors, errors

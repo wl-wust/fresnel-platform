@@ -66,18 +66,10 @@ if (fs.existsSync(optPath)) {
   check('光学页有"删除选中元件"按钮', /onclick="deleteSelected\(\)"/.test(opt));
   const i1 = opt.indexOf('optical-fix.js'), i2 = opt.indexOf('optical-interact.js');
   check('光学页加载 Pointer 交互层且在 fix 之后', i2 > i1 && i1 >= 0, 'fix@' + i1 + ' interact@' + i2);
-  const iVisual = opt.indexOf('optical-visual.js'), iComsol = opt.indexOf('optical-comsol.js');
-  check('光学页加载 COMSOL 预计算视图且在视觉层之后',
-        iComsol > iVisual && iVisual >= 0, 'visual@' + iVisual + ' comsol@' + iComsol);
-  check('光学页提供教学示意与实验装置模式',
-        /data-optical-mode="teaching"/.test(opt) && /data-optical-mode="comsol"/.test(opt));
-  check('实验装置模式包含报告图 3.1、COMSOL 对照图与指标容器',
-        ['assets/optical-apparatus-setup.png', 'FresnelBiprism_2D_View.png',
-         'FresnelBiprism_OpticalPath_Interference.png', 'id="comsolMatch"', 'id="comsolParamNotice"']
-          .every(token => opt.includes(token)));
-  check('页面明确区分报告装置示意与实物机械图',
-        /报告图 3\.1/.test(opt) && /不是机械实拍照片/.test(opt) &&
-        !opt.includes('FresnelBiprism_Apparatus_Appearance.png'));
+  const iVisual = opt.indexOf('optical-visual.js');
+  check('光学页加载工程线稿视觉层', iVisual >= 0, 'visual@' + iVisual);
+  check('网页不再接入 COMSOL 图片、模式切换或脚本',
+        !/optical-comsol\.js|comsolView|data-optical-mode|FresnelBiprism_.*\.png/.test(opt));
 } else {
   check('存在 optical.html', false);
 }

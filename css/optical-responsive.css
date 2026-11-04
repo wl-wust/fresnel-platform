@@ -34,25 +34,7 @@
     min-height: 260px;
     order: -1;            /* 手机上先看画布，再滑到工具与参数 */
   }
-  .canvas-mode-bar {
-    left: 10px;
-    transform: none;
-  }
-  .canvas-overlay { top: 56px; left: 10px; }
-  .comsol-view { padding: 58px 10px 14px; }
-  .comsol-layout { grid-template-columns: minmax(0, 1fr); }
-  .comsol-head {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .comsol-match { align-self: flex-start; }
-  .canvas-area[data-mode="comsol"] {
-    height: min(820px, 78vh);
-    min-height: 560px;
-    overflow: hidden;
-  }
-  .comsol-image-stage { min-height: 0; }
+  .canvas-overlay { top: 58px; left: 10px; }
   .preset-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -78,10 +60,6 @@
   .canvas-area {
     height: 40vh;
   }
-  .canvas-mode-btn { padding-inline: 11px; }
-  .comsol-head h2 { font-size: 15px; }
-  .comsol-metric strong { font-size: 15px; }
-  .comsol-figure figcaption { flex-direction: column; gap: 4px; }
   .angle-control {
     grid-template-columns: minmax(0, 1fr) 64px auto;
   }

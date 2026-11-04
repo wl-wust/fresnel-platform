@@ -1,0 +1,14 @@
+{
+  "schema": "bp.comsol-scene/1",
+  "parameters": {
+    "lambda_nm": 589.3,
+    "n_glass": 1.5168,
+    "beta_deg": 1.0,
+    "a_mm": 50.0,
+    "z2_mm": 950.0,
+    "slit_b_mm": 0.08,
+    "prism_half_height_mm": 15.0,
+    "prism_thickness_mm": 2.0,
+    "tip_half_mm": 0.03
+  }
+}
