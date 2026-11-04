@@ -20,6 +20,22 @@ def main():
         )
 
         page.goto(BASE + "/optical.html", wait_until="networkidle")
+        page.wait_for_function("window.BP?.pages?.opticalVisual?.renderEngineeringScene")
+        page.wait_for_timeout(300)
+        style_sample = page.evaluate(
+            """
+            () => {
+              const cv = document.getElementById('opticalCanvas');
+              const data = cv.getContext('2d').getImageData(8, 8, 1, 1).data;
+              return { r: data[0], g: data[1], b: data[2] };
+            }
+            """
+        )
+        assert (
+            style_sample["r"] > 220
+            and style_sample["g"] > 215
+            and style_sample["b"] > 200
+        ), style_sample
         assert page.locator("#sourceMode").count() == 1
         assert page.locator("#betaRange").count() == 1
         assert page.locator("#horizontalLock").count() == 1
