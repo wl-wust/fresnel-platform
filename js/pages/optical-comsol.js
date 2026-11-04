@@ -60,7 +60,7 @@
     var badge = doc.getElementById('comsolMatch');
     if (notice) notice.hidden = state.matches;
     if (badge) {
-      badge.textContent = state.matches ? '参数匹配基准场景' : '参数已偏离基准';
+      badge.textContent = state.matches ? '参数匹配报告基准' : '参数已偏离基准';
       badge.classList.toggle('mismatch', !state.matches);
     }
     return state;
@@ -162,7 +162,7 @@
       input.addEventListener('input', updateParameterNotice);
     });
     setMode('teaching');
-    setFigure('comsolFigure2d');
+    setFigure('comsolFigureSetup');
     updateParameterNotice();
   }
 

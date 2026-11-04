@@ -58,9 +58,9 @@ def main():
         assert page.locator("#comsolView").is_visible()
         assert not page.locator("#opticalCanvas").is_visible()
         for figure in (
+            "comsolFigureSetup",
             "comsolFigure2d",
             "comsolFigurePath",
-            "comsolFigureApparatus",
         ):
             page.click(f'[data-comsol-figure="{figure}"]')
             page.wait_for_function(
@@ -174,13 +174,13 @@ def main():
         mobile.wait_for_function("window.BP?.pages?.opticalComsol")
         mobile.click('[data-optical-mode="comsol"]')
         mobile.wait_for_function(
-            "() => { const img = document.getElementById('comsolFigure2d');"
+            "() => { const img = document.getElementById('comsolFigureSetup');"
             " return img.complete && img.naturalWidth > 0; }"
         )
         mobile_state = mobile.evaluate(
             """
             () => {
-              const img = document.getElementById('comsolFigure2d');
+              const img = document.getElementById('comsolFigureSetup');
               const view = document.getElementById('comsolView');
               const figure = img.closest('.comsol-figure-panel').getBoundingClientRect();
               return {

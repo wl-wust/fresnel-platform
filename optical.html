@@ -70,7 +70,7 @@
                 data-optical-mode="teaching">教学示意</button>
         <button class="canvas-mode-btn" id="comsolModeTab" type="button"
                 role="tab" aria-selected="false" aria-controls="comsolView"
-                data-optical-mode="comsol">COMSOL 验证</button>
+                data-optical-mode="comsol">实验装置</button>
       </div>
 
       <canvas id="opticalCanvas" class="teaching-only" aria-label="菲涅耳双棱镜教学示意画布"></canvas>
@@ -90,56 +90,61 @@
                aria-labelledby="comsolModeTab" hidden>
         <header class="comsol-head">
           <div>
-            <span class="comsol-kicker">COMSOL 6.4 · 静态预计算</span>
-            <h2>完整装置、二维光路与干涉交叠</h2>
+            <span class="comsol-kicker">报告图 3.1 · 实际搭建链路</span>
+            <h2>实验装置与 COMSOL 光路对照</h2>
           </div>
-          <span class="comsol-match" id="comsolMatch">参数匹配基准场景</span>
+          <span class="comsol-match" id="comsolMatch">参数匹配报告基准</span>
         </header>
 
         <div class="comsol-param-notice" id="comsolParamNotice" role="status" hidden>
-          当前参数已偏离基准场景，图像与指标仍对应下方列出的 COMSOL 参数。
+          当前参数已偏离报告基准，实际装置图仍有效；右侧 COMSOL 指标只对应下方列出的基准参数。
         </div>
 
         <div class="comsol-layout">
           <div class="comsol-figure-panel">
-            <div class="comsol-figure-tabs" role="tablist" aria-label="COMSOL 预计算图">
+            <div class="comsol-figure-tabs" role="tablist" aria-label="实验装置与 COMSOL 图">
               <button class="comsol-figure-tab active" type="button" role="tab"
-                      aria-selected="true" aria-controls="comsolFigure2d"
-                      data-comsol-figure="comsolFigure2d">完整光路</button>
+                      aria-selected="true" aria-controls="comsolFigureSetup"
+                      data-comsol-figure="comsolFigureSetup">报告装置图</button>
+              <button class="comsol-figure-tab" type="button" role="tab"
+                      aria-selected="false" aria-controls="comsolFigure2d"
+                      data-comsol-figure="comsolFigure2d">COMSOL 光路</button>
               <button class="comsol-figure-tab" type="button" role="tab"
                       aria-selected="false" aria-controls="comsolFigurePath"
-                      data-comsol-figure="comsolFigurePath">光路三视图</button>
-              <button class="comsol-figure-tab" type="button" role="tab"
-                      aria-selected="false" aria-controls="comsolFigureApparatus"
-                      data-comsol-figure="comsolFigureApparatus">装置外观</button>
+                      data-comsol-figure="comsolFigurePath">COMSOL 三视图</button>
             </div>
 
             <figure class="comsol-figure">
               <div class="comsol-image-stage">
-                <img id="comsolFigure2d" class="comsol-figure-image active"
+                <img id="comsolFigureSetup" class="comsol-figure-image active"
+                     src="assets/optical-apparatus-setup.png"
+                     alt="报告图 3.1 菲涅耳双棱镜干涉实验装置主光路俯视示意图"
+                     data-caption="报告图 3.1 的实际搭建链路：钠灯 → 滤光片/衰减片 → 45° 半透半反镜 → 可调单缝 S → 双棱镜 → 可插拔透镜 L′ → 圆孔光阑 → 测微目镜 → 手机。图中是光路示意图，不是机械实拍照片。">
+                <img id="comsolFigure2d" class="comsol-figure-image"
                      src="comsol/FresnelBiprism_2D_View.png"
                      alt="COMSOL 绘制的菲涅耳双棱镜完整二维装置、上下两束折射光和绿色干涉交叠区"
-                     data-caption="完整二维装置：黄色入射光经双棱镜分成两束，绿色区域为 x = 192–1000 mm 的干涉交叠区。">
+                     loading="lazy"
+                     data-caption="COMSOL 光路验证几何：黄色入射光经双棱镜分成两束，绿色区域为 x = 192–1000 mm 的干涉交叠区。此图用于验证光路，不代表真实机械结构。">
                 <img id="comsolFigurePath" class="comsol-figure-image"
                      src="comsol/FresnelBiprism_OpticalPath_Interference.png"
                      alt="COMSOL 光路三视图，包含完整光路、双棱镜局部放大和屏前干涉区"
                      loading="lazy"
-                     data-caption="三视图汇总：完整光路、光源与双棱镜局部放大，以及屏前干涉区的几何包络。">
-                <img id="comsolFigureApparatus" class="comsol-figure-image"
-                     src="comsol/FresnelBiprism_Apparatus_Appearance.png"
-                     alt="COMSOL 建立的菲涅耳双棱镜教学实验装置外观模型"
-                     loading="lazy"
-                     data-caption="机械装置外观：导轨、支脚、光源、双棱镜 V 形夹持架和实体光屏；纵向长度仅作显示压缩。">
+                     data-caption="COMSOL 三视图汇总：完整光路、光源与双棱镜局部放大，以及屏前干涉区的几何包络；属于模型验证图，不是仪器实拍。">
               </div>
               <figcaption>
-                <span id="comsolFigureCaption">完整二维装置：黄色入射光经双棱镜分成两束，绿色区域为 x = 192–1000 mm 的干涉交叠区。</span>
+                <span id="comsolFigureCaption">报告图 3.1 的实际搭建链路：钠灯 → 滤光片/衰减片 → 45° 半透半反镜 → 可调单缝 S → 双棱镜 → 可插拔透镜 L′ → 圆孔光阑 → 测微目镜 → 手机。图中是光路示意图，不是机械实拍照片。</span>
                 <a class="comsol-original-link" id="comsolOpenOriginal"
-                   href="comsol/FresnelBiprism_2D_View.png" target="_blank" rel="noopener">查看原图</a>
+                   href="assets/optical-apparatus-setup.png" target="_blank" rel="noopener">查看原图</a>
               </figcaption>
             </figure>
           </div>
 
           <aside class="comsol-metrics" aria-label="COMSOL 验证指标">
+            <div class="comsol-chain">
+              <h3>实际搭建链路</h3>
+              <p>钠灯 → 滤光片/衰减片 → 45° 半透半反镜 → 可调单缝 S → 双棱镜 → 可插拔透镜 L′ → 圆孔光阑 → 测微目镜 → 手机</p>
+              <small>透镜 L′ 仅在二次成像测 d 时插入；测条纹间距 Δx 时移出。650 nm 激光经 45° 镜折入光路，用于预准直和比值法参考。</small>
+            </div>
             <div class="comsol-metric-grid">
               <div class="comsol-metric">
                 <span>虚光源间距 d</span>
@@ -174,7 +179,7 @@
             </div>
 
             <p class="comsol-note">
-              此模式展示 COMSOL 6.4 的预计算投影，不在浏览器内实时求解。COMSOL 验证光路与交叠区，现有平台继续负责条纹强度、参数计算和实验数据处理。
+              COMSOL 6.4 仅对光路、虚光源位置和干涉交叠区做预计算验证，不在浏览器内实时求解，也不代表真实机械尺寸或安装照片。现有平台继续负责条纹强度和实验数据处理。
             </p>
             <a class="comsol-doc-link" href="comsol/README.md" target="_blank" rel="noopener">查看 COMSOL 模型说明</a>
           </aside>
