@@ -375,7 +375,7 @@
     setVal('fringe_sodium', REPORT.dxNaPx); setVal('fringe_laser', REPORT.dxRefPx);
     setVal('lambda_laser', REPORT.lamRef);
     setVal('n_na', REPORT.nNa); setVal('n_ref', REPORT.nRef);
-    BP.ui.alert('已填入研究报告表 5.1 参数', 'ok');
+    BP.ui.alert('已填入研究报告表 5.1 预设；这些值不是当前实测，来源已在页面顶部标明', 'info');
   }
 
   /* ---------------- 从当前测量会话填入 ---------------- */
@@ -413,6 +413,7 @@
         source: saved.source || 'manual',
         L_mm: saved.L,
         N_px: saved.N,
+        L_source: saved.L_source,
         at: new Date().toISOString()
       }
     });
@@ -486,6 +487,20 @@
       { label: '数据状态', value: data.complete ? '核心参数已齐全' : '仍有缺失项',
         cls: data.complete ? 'is-key' : 'is-warn' }
     ];
+    ['sodium', 'reference', 'no_lens', 'with_lens'].forEach(function (role) {
+      var stat = data.stats[role];
+      if (!stat || !stat.n) return;
+      rows.push({
+        label: (BP.sessions.ROLE_LABEL[role] || role) + '有效帧',
+        // 旧会话可能缺少条纹数，只有真实数值才显示平均值。
+        value: stat.n + ' 帧' + (Number.isFinite(stat.meanStripeCount)
+          ? ' · 平均 ' + stat.meanStripeCount.toFixed(1) + ' 条条纹'
+          : ''),
+        note: stat.qualityStatus === 'reference-only'
+          ? '帧间波动超过稳定门限，仅参考；Δx 不使用报告预设'
+          : 'Δx 来自当前会话真实识别，不使用报告条纹间距'
+      });
+    });
     (keysByMethod[data.method] || []).forEach(function (key) {
       var value = data.values[key];
       var source = data.sources[key] || '缺失';
@@ -570,7 +585,7 @@
       tbody.appendChild(tr);
     });
     setVal('standard_value', 589.3);
-    BP.ui.alert('已填入表 5.2 的三条路径', 'ok');
+    BP.ui.alert('已填入表 5.2 三条路径的报告预设，不代表当前实测', 'info');
   }
 
   /* ---------------- 表格行操作（不用 innerHTML） ---------------- */

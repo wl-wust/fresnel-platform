@@ -89,6 +89,7 @@
   function loadK() { return get(K.k, null); }
   function saveK(value, meta) {
     return set(K.k, { value: value, L: meta && meta.L, N: meta && meta.N,
+                      L_source: meta && meta.L_source,
                       source: (meta && meta.source) || 'manual', at: new Date().toISOString() });
   }
   function clearK() { return del(K.k); }

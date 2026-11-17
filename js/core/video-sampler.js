@@ -14,6 +14,8 @@
     maxSaturation: 0.02,
     maxCv: 0.005
   };
+  var SHORT_VIDEO_SECONDS = 10;
+  var SHORT_VIDEO_TARGET = 5;
 
   function num(value) {
     return isFinite(Number(value)) ? Number(value) : 0;
@@ -85,11 +87,20 @@
         return sum + (value - mean) * (value - mean);
       }, 0) / (values.length - 1));
     }
+    var stripeValues = (items || []).map(function (item) {
+      return Number(item.stripeCount);
+    }).filter(function (value) {
+      return isFinite(value) && value > 0;
+    });
+    var meanStripeCount = stripeValues.length
+      ? stripeValues.reduce(function (sum, value) { return sum + value; }, 0) / stripeValues.length
+      : NaN;
     return {
       n: values.length,
       meanPx: mean,
       sdPx: sd,
-      cv: isFinite(mean) && mean ? sd / mean : NaN
+      cv: isFinite(mean) && mean ? sd / mean : NaN,
+      meanStripeCount: meanStripeCount
     };
   }
 
@@ -134,6 +145,56 @@
     return result;
   }
 
+  /* 短片采用更密的覆盖采样；长视频仍限制解码次数。
+   * 该函数只改变采样覆盖，不改变任何单帧质量门限。
+   */
+  function adaptiveGap(durationSec) {
+    var duration = Number(durationSec);
+    if (!(duration > 0)) return DEFAULTS.minGapMs / 1000;
+    if (duration <= 12) {
+      var raw = duration / 40;
+      var rounded = Math.round(raw / 0.05) * 0.05;
+      return Number(Math.max(0.1, Math.min(0.5, rounded)).toFixed(2));
+    }
+    return Math.max(0.5, Math.ceil(duration / 600 * 2) / 2);
+  }
+
+  /* 10 秒以内视频自动建议 5 帧参考目标；页面会显示该策略。
+   * 该目标只调整样本数，不降低 isValid 的质量门限。
+   */
+  function recommendedTarget(durationSec, requested) {
+    var duration = Number(durationSec);
+    var target = isFinite(requested) && Number(requested) > 0
+      ? Math.floor(Number(requested))
+      : DEFAULTS.target;
+    return duration > 0 && duration <= SHORT_VIDEO_SECONDS && target > SHORT_VIDEO_TARGET
+      ? SHORT_VIDEO_TARGET
+      : target;
+  }
+
+  /* 短片自动切到 5 帧后，选择器会保留 5 以便确认参考帧。
+   * 下一次导入长视频时，需恢复用户上一次显式选择，避免批量导入悄然降标。
+   */
+  function planImportTargets(durationSec, selectedTarget, previousExplicitTarget) {
+    var duration = Number(durationSec);
+    var selected = isFinite(selectedTarget) && Number(selectedTarget) > 0
+      ? Math.floor(Number(selectedTarget))
+      : DEFAULTS.target;
+    var explicit = isFinite(previousExplicitTarget) && Number(previousExplicitTarget) > 0
+      ? Math.floor(Number(previousExplicitTarget))
+      : selected;
+    var restored = duration > SHORT_VIDEO_SECONDS &&
+      selected === SHORT_VIDEO_TARGET && explicit !== SHORT_VIDEO_TARGET;
+    var requested = restored ? explicit : selected;
+    var effective = recommendedTarget(duration, requested);
+    return {
+      requestedTarget: requested,
+      effectiveTarget: effective,
+      autoAdjusted: effective !== requested,
+      restored: restored
+    };
+  }
+
   var API = {
     DEFAULTS: DEFAULTS,
     isValid: isValid,
@@ -143,7 +204,10 @@
     isEnough: isEnough,
     pickMimeType: pickMimeType,
     recordingFilename: recordingFilename,
-    sampleTimes: sampleTimes
+    sampleTimes: sampleTimes,
+    adaptiveGap: adaptiveGap,
+    recommendedTarget: recommendedTarget,
+    planImportTargets: planImportTargets
   };
 
   global.BP = global.BP || {};

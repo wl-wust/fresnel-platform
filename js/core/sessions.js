@@ -205,6 +205,7 @@
       size: frame.size || 0,
       deltaXPx: numericOrNull(frame.deltaXPx),
       deltaXmm: numericOrNull(frame.deltaXmm),
+      stripeCount: numericOrNull(frame.stripeCount),
       quality: numericOrNull(frame.quality),
       source: frame.source || '',
       sourceName: frame.sourceName || '',
@@ -256,6 +257,8 @@
       return !f.excluded && f.deltaXPx !== null && isFinite(f.deltaXPx);
     });
     var values = frames.map(function (f) { return Number(f.deltaXPx); });
+    var stripeValues = frames.map(function (f) { return Number(f.stripeCount); })
+      .filter(function (value) { return isFinite(value) && value > 0; });
     var mean = values.reduce(function (a, b) { return a + b; }, 0) / (values.length || 1);
     var sd = 0;
     if (values.length > 1) {
@@ -268,7 +271,13 @@
       label: ROLE_LABEL[role],
       n: values.length,
       meanPx: values.length ? mean : NaN,
-      sdPx: values.length > 1 ? sd : NaN
+      sdPx: values.length > 1 ? sd : NaN,
+      stabilityOk: frames.every(function (frame) {
+        return !frame.selection || frame.selection.stabilityOk !== false;
+      }),
+      meanStripeCount: stripeValues.length
+        ? stripeValues.reduce(function (sum, value) { return sum + value; }, 0) / stripeValues.length
+        : NaN
     };
   }
 

@@ -1,12 +1,14 @@
 """使用 Playwright 检查 PC/手机页签、会话和 A_eff 交互。"""
 
 import json
+import os
 import sys
 
 from playwright.sync_api import sync_playwright
 
 
-BASE = "http://127.0.0.1:8099"
+# 默认仍可配合临时静态服务器使用，也允许直接检查当前 HTTPS 局域网平台。
+BASE = os.environ.get("BASE", "http://127.0.0.1:8099")
 sys.stdout.reconfigure(encoding="utf-8")
 
 
@@ -14,7 +16,8 @@ def main():
     result = {}
     errors = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # 本机局域网平台使用自签名证书；测试浏览器需显式忽略证书错误。
+        browser = p.chromium.launch(headless=True, args=["--ignore-certificate-errors"])
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.on("pageerror", lambda exc: errors.append("pageerror: " + str(exc)))
         page.on("console", lambda msg: errors.append("console: " + msg.text) if msg.type == "error" else None)
@@ -384,6 +387,10 @@ def main():
         raise SystemExit(5)
     if not result["mobile"]["auto_fill"]["complete"]:
         raise SystemExit(6)
+    if any("平均 0.0 条条纹" in item["summary"] for item in result["pc"]["auto_fill"]):
+        raise SystemExit(25)
+    if "平均 0.0 条条纹" in result["mobile"]["auto_fill"]["summary"]:
+        raise SystemExit(26)
     if abs(float(result["mobile"]["auto_fill"]["dxInput"]) - 163.4) > 0.01:
         raise SystemExit(7)
     if "—（未标定 k）" not in result["pc"]["uncalibrated"]:

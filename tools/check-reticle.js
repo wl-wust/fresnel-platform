@@ -55,12 +55,41 @@ function makeReticleImage(opts) {
   return { data: data, width: w, height: h };
 }
 
+/* 只有规则暗纹、没有任何目镜刻线的视场。
+ * 旧算法把整段上半视场压成一条列投影，会把这些暗纹误当成 8 条刻线。
+ */
+function makeStripeFieldImage(width, height, periodPx, amplitude) {
+  var data = new Uint8ClampedArray(width * height * 4);
+  var cx = (width - 1) / 2;
+  var cy = 600;
+  var radius = width * 0.6;
+  var seed = 11;
+  function rnd() {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648 - 0.5;
+  }
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      var p = (y * width + x) * 4;
+      var inside = Math.hypot(x - cx, y - cy) <= radius ? 1 : 0;
+      var fringe = amplitude * Math.sin(2 * Math.PI * (x + y * 0.12) / periodPx);
+      var glare = 15 * (1 - Math.abs(x - cx) / radius);
+      var v = inside * (180 + fringe + glare + 3 * rnd());
+      data[p] = v;
+      data[p + 1] = v * 0.82;
+      data[p + 2] = v * 0.35;
+      data[p + 3] = 255;
+    }
+  }
+  return { data: data, width: width, height: height };
+}
+
 var image = makeReticleImage({ fringes: true, ticks: [120, 200, 280, 360] });
 var detected = page.detectReticleLines
   ? page.detectReticleLines(image.data, image.width, image.height)
   : null;
 check('自动识别函数存在', !!detected, detected ? '' : 'mobile.js 未导出 detectReticleLines');
-check('至少识别 3 条刻线', !!detected && detected.lines.length >= 3,
+check('完整识别 4 条合成刻线', !!detected && detected.lines.length === 4,
   detected ? JSON.stringify(detected) : '无结果');
 check('相邻间距为 80 px', !!detected && Math.abs(detected.spacingPx - 80) <= 2,
   detected ? 'spacing=' + detected.spacingPx : '无结果');
@@ -72,6 +101,14 @@ var falsePositive = page.detectReticleLines
 check('宽干涉条纹不冒充刻线',
   !falsePositive || !falsePositive.lines || falsePositive.lines.length < 3,
   falsePositive ? JSON.stringify(falsePositive) : '未误检');
+
+var stripeField = makeStripeFieldImage(1080, 1440, 120, 75);
+var stripeFalsePositive = page.detectReticleLines
+  ? page.detectReticleLines(stripeField.data, stripeField.width, stripeField.height)
+  : null;
+check('规则暗纹场不冒充 8 条等距刻线',
+  !stripeFalsePositive || !stripeFalsePositive.lines || stripeFalsePositive.lines.length < 3,
+  stripeFalsePositive ? JSON.stringify(stripeFalsePositive) : '未误检');
 
 var manual = page.manualReticlePixels
   ? page.manualReticlePixels({ x: 100, y: 100 }, { x: 300, y: 160 }, 0.5)

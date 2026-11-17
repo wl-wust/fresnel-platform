@@ -67,6 +67,7 @@
         source: (meta && meta.source) || 'manual',
         L_mm: meta && meta.L,
         N_px: meta && meta.N,
+        L_source: meta && meta.L_source,
         at: new Date().toISOString()
       }
     });
@@ -192,7 +193,10 @@
     roles.forEach(function (role) {
       var stat = S().roleStats(session.id, role);
       var chip = el('span', 'role-chip ' + (stat.n ? 'is-done' : 'is-missing'));
-      chip.textContent = stat.label + '：' + stat.n + ' 帧';
+      chip.textContent = stat.label + '：' + stat.n + ' 帧' +
+        (Number.isFinite(stat.meanStripeCount)
+          ? ' · 约 ' + stat.meanStripeCount.toFixed(0) + ' 条'
+          : '');
       host.appendChild(chip);
     });
     if (session.method === 'trace') {
@@ -215,6 +219,11 @@
     BP.ui.result(host, [
       { label: '角色', value: stat.label, cls: 'is-key' },
       { label: '启用帧数', value: String(stat.n) },
+      { label: '平均条纹数', value: Number.isFinite(stat.meanStripeCount)
+        ? stat.meanStripeCount.toFixed(1) + ' 条'
+        : '—' },
+      { label: '稳定性', value: stat.stabilityOk ? '通过' : '波动偏大，仅参考',
+        cls: stat.stabilityOk ? '' : 'is-warn' },
       { label: 'Δx 均值', value: isFinite(stat.meanPx) ? F.px(stat.meanPx) + ' px' : '—' },
       { label: 'Δx 标准差', value: isFinite(stat.sdPx) ? F.px(stat.sdPx) + ' px' : '—（单帧）' }
     ], { caption: sessionText(session) });
@@ -294,6 +303,7 @@
         source: saved.source || 'manual',
         L_mm: saved.L,
         N_px: saved.N,
+        L_source: saved.L_source,
         at: new Date().toISOString()
       }
     });
@@ -325,6 +335,19 @@
       { label: '数据状态', value: data.complete ? '核心参数已齐全' : '仍有缺失项',
         cls: data.complete ? 'is-key' : 'is-warn' }
     ];
+    ['sodium', 'reference', 'no_lens', 'with_lens'].forEach(function (role) {
+      var stat = data.stats[role];
+      if (!stat || !stat.n) return;
+      rows.push({
+        label: (S().ROLE_LABEL[role] || role) + '有效帧',
+        value: stat.n + ' 帧' + (Number.isFinite(stat.meanStripeCount)
+          ? ' · 平均 ' + stat.meanStripeCount.toFixed(1) + ' 条条纹'
+          : ''),
+        note: stat.qualityStatus === 'reference-only'
+          ? '帧间波动超过稳定门限，仅参考；Δx 不使用报告预设'
+          : 'Δx 来自当前会话真实识别，不使用报告条纹间距'
+      });
+    });
     (keysByMethod[data.method] || []).forEach(function (key) {
       rows.push({
         label: SESSION_FIELD_LABEL[key] || key,
@@ -443,7 +466,10 @@
         size: file.size,
         deltaXPx: r.periodPx,
         deltaXmm: r.deltaXmm,
+        stripeCount: r.stripeCount,
         quality: r.visibility,
+        source: 'photo',
+        sourceName: file.name,
         analysis: {
           axis: r.axis,
           visibility: r.visibility,
@@ -452,7 +478,8 @@
           roi: r.roi,
           signal: r.signal,
           spectralSnr: r.spectralSnr,
-          acfPeak: r.acfPeak
+          acfPeak: r.acfPeak,
+          stripeCount: r.stripeCount
         }
       }).then(function (frame) {
         cam.file = file;
@@ -480,6 +507,8 @@
         blob: file,
         name: file.name,
         size: file.size,
+        source: 'photo',
+        sourceName: file.name,
         analysisError: e.message
       }).then(function () {
         showPreview(file, '已保存，但识别失败：' + e.message);
@@ -632,15 +661,6 @@
     return { p40: at(0.40), p95: at(0.95), at: at };
   }
 
-  function reticlePeakAt(profile, x, radius) {
-    var from = Math.max(0, x - radius), to = Math.min(profile.length - 1, x + radius);
-    for (var i = from; i <= to; i++) {
-      if (i !== x && profile[i] > profile[x] + 1e-9) return false;
-      if (i < x && profile[i] === profile[x]) return false;
-    }
-    return true;
-  }
-
   function reticleMedian(values) {
     if (!values.length) return 0;
     var a = values.slice().sort(function (x, y) { return x - y; });
@@ -732,62 +752,111 @@
       }
     }
 
-    var profile = new Float32Array(width);
-    var meanProfile = new Float32Array(width);
-    for (x = x0; x <= x1; x++) {
-      var maxAtX = 0, rr;
-      for (rr = 0; rr < rows; rr++) maxAtX = Math.max(maxAtX, residual[rr * width + x]);
-      var runThreshold = Math.max(0.75, maxAtX * 0.22);
-      var bestLen = 0, curLen = 0, bestSum = 0, curSum = 0;
-      for (rr = 0; rr < rows; rr++) {
-        var valAt = residual[rr * width + x];
-        if (valAt >= runThreshold) {
-          curLen++; curSum += valAt;
-          if (curLen > bestLen) { bestLen = curLen; bestSum = curSum; }
-        } else {
-          curLen = 0; curSum = 0;
+    /* 将局部暗响应做成二维连通线。
+     * 目镜刻线是窄而连续的竖线；规则干涉暗纹通常更宽，或在不同横坐标上
+     * 落在不同纵向区间。先保留几何线，再检查共同纵向区间，避免只凭列投影
+     * 把整片周期纹理拼成等距序列。
+     */
+    var binary = new Uint8Array(width * rows);
+    var visited = new Uint8Array(width * rows);
+    var maxMean = 0;
+    for (var rbi = 0; rbi < rows; rbi++) {
+      var rowMax = 0;
+      for (x = x0; x <= x1; x++) {
+        var rv = residual[rbi * width + x];
+        rowMax = Math.max(rowMax, rv);
+        maxMean = Math.max(maxMean, rv);
+      }
+      // 强阈值先把连续的弱纹理海割开；真正的黑色刻线仍保留为独立窄竖段。
+      var rowThreshold = Math.max(0.75, rowMax * 0.42);
+      for (x = x0; x <= x1; x++) {
+        if (residual[rbi * width + x] >= rowThreshold) {
+          binary[rbi * width + x] = 1;
         }
       }
-      if (bestLen) {
-        meanProfile[x] = bestSum / bestLen;
-        profile[x] = meanProfile[x] * Math.sqrt(bestLen);
-      }
-    }
-    var smooth = new Float32Array(width);
-    var smoothRadius = 3;
-    for (x = x0; x <= x1; x++) {
-      var sum = 0, cnt = 0;
-      for (var sx = Math.max(x0, x - smoothRadius); sx <= Math.min(x1, x + smoothRadius); sx++) {
-        sum += profile[sx]; cnt++;
-      }
-      smooth[x] = sum / cnt;
-    }
-    profile = smooth;
-
-    var maxProfile = 0, maxMean = 0;
-    for (x = x0; x <= x1; x++) {
-      maxProfile = Math.max(maxProfile, profile[x]);
-      maxMean = Math.max(maxMean, meanProfile[x]);
     }
     if (maxMean < 3.5) return { lines: [], spacingPx: NaN, count: 0, error: '刻线对比度不足' };
 
-    var peakRadius = Math.max(2, Math.round(width * 0.005));
-    var promRadius = Math.max(10, Math.round(width * 0.04));
-    var minProm = Math.max(0.25, maxProfile * 0.025);
-    var minScore = Math.max(0.75, maxProfile * 0.20);
-    var peaks = [];
-    for (x = x0 + peakRadius; x <= x1 - peakRadius; x++) {
-      if (profile[x] < minScore || !reticlePeakAt(profile, x, peakRadius)) continue;
-      var lo = Math.max(x0, x - promRadius), hi = Math.min(x1, x + promRadius);
-      var localMin = profile[x];
-      for (var px = lo; px <= hi; px++) localMin = Math.min(localMin, profile[px]);
-      var prom = profile[x] - localMin;
-      if (prom >= minProm) peaks.push({ x: x, score: profile[x], prom: prom });
+    var stack = new Int32Array(binary.length);
+    var rawCandidates = [];
+    for (var by = 0; by < rows; by++) {
+      for (var bx = x0; bx <= x1; bx++) {
+        var seedIndex = by * width + bx;
+        if (!binary[seedIndex] || visited[seedIndex]) continue;
+        var stackSize = 0, area = 0, sumX = 0, sumScore = 0;
+        var minX = bx, maxX = bx, minRow = by, maxRow = by;
+        stack[stackSize++] = seedIndex;
+        visited[seedIndex] = 1;
+        while (stackSize) {
+          var curIndex = stack[--stackSize];
+          var cy = Math.floor(curIndex / width);
+          var cx = curIndex - cy * width;
+          area++;
+          sumX += cx;
+          sumScore += residual[curIndex];
+          minX = Math.min(minX, cx); maxX = Math.max(maxX, cx);
+          minRow = Math.min(minRow, cy); maxRow = Math.max(maxRow, cy);
+          // 只用四邻域，避免斜向条纹把独立刻线连成一条宽带。
+          for (var ndy = -1; ndy <= 1; ndy++) {
+            for (var ndx = -1; ndx <= 1; ndx++) {
+              if (ndy !== 0 && ndx !== 0) continue;
+              var ny = cy + ndy;
+              var nx = cx + ndx;
+              if (ny < 0 || ny >= rows || nx < x0 || nx > x1) continue;
+              var nextIndex = ny * width + nx;
+              if (!binary[nextIndex] || visited[nextIndex]) continue;
+              visited[nextIndex] = 1;
+              stack[stackSize++] = nextIndex;
+            }
+          }
+        }
+        var lineWidth = maxX - minX + 1;
+        var lineRows = maxRow - minRow + 1;
+        var fill = area / (lineWidth * lineRows);
+        // 刻线在本分析尺度下通常只有数个像素宽；宽暗带不参与等距拟合。
+        if (lineWidth > Math.max(8, Math.round(width * 0.012)) ||
+            lineRows < Math.max(6, Math.round(rows * 0.04)) ||
+            lineRows / lineWidth < 3 || fill < 0.22) continue;
+        rawCandidates.push({
+          x: sumX / area,
+          score: sumScore / area * Math.sqrt(area),
+          area: area,
+          y0: rowIds[minRow],
+          y1: rowIds[maxRow],
+          widthPx: lineWidth,
+          heightPx: rowIds[maxRow] - rowIds[minRow] + yStep
+        });
+      }
     }
+
+    // 同一刻线可能被阈值切成两小段，合并横坐标近且纵向重叠的同一条线。
+    rawCandidates.sort(function (c1, c2) { return c1.x - c2.x; });
+    var peaks = [];
+    rawCandidates.forEach(function (item) {
+      var last = peaks[peaks.length - 1];
+      var overlap = last
+        ? Math.min(last.y1, item.y1) - Math.max(last.y0, item.y0)
+        : 0;
+      var shorter = last ? Math.min(last.y1 - last.y0, item.y1 - item.y0) : 0;
+      if (last && item.x - last.x <= 3 && overlap >= shorter * 0.35) {
+        var totalArea = last.area + item.area;
+        last.x = (last.x * last.area + item.x * item.area) / totalArea;
+        last.score = Math.max(last.score, item.score);
+        last.area = totalArea;
+        last.y0 = Math.min(last.y0, item.y0);
+        last.y1 = Math.max(last.y1, item.y1);
+        last.widthPx = Math.max(last.widthPx, item.widthPx);
+        last.heightPx = Math.max(last.heightPx, item.heightPx);
+      } else {
+        peaks.push(item);
+      }
+    });
+    peaks.sort(function (c1, c2) { return c1.x - c2.x; });
+
     if (peaks.length < 3) {
       return {
         lines: [], spacingPx: NaN, count: 0, error: '候选刻线不足',
-        debug: { maxProfile: maxProfile, peakCount: peaks.length, y0: y0, y1: y1,
+        debug: { maxMean: maxMean, peakCount: peaks.length, y0: y0, y1: y1,
                  x0: x0, x1: x1, fieldThreshold: fieldThreshold,
                  peaks: peaks.slice(0, 20).map(function (q4) { return q4.x; }) }
       };
@@ -796,21 +865,34 @@
     var maxS = width * 0.28;
     var best = null;
     var maxLines = 8;
+    var fieldHeight = Math.max(1, y1 - y0);
+    function sameVerticalBand(a, b) {
+      var overlap = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+      var shorter = Math.min(a.y1 - a.y0, b.y1 - b.y0);
+      if (overlap < Math.max(4, shorter * 0.55)) return false;
+      var centerA = (a.y0 + a.y1) / 2;
+      var centerB = (b.y0 + b.y1) / 2;
+      return Math.abs(centerA - centerB) <= Math.max(fieldHeight * 0.12, shorter * 0.7);
+    }
     function consider(a, b, gap) {
       if (!(b.x > a.x)) return;
       var S = (b.x - a.x) / gap;
       if (!(S >= minS && S <= maxS)) return;
-      var tol = Math.max(2.5, S * 0.04);
-      var assigned = [];
+      // 手机拍摄会带来轻微透视，允许 12% 的相邻间距差；拟合后仍用 RMS 门限
+      // 检查一致性，宽暗纹即便具有周期也不会因放宽匹配范围自动通过。
+      var tol = Math.max(3, S * 0.12);
+      var assigned = [], used = {};
       for (var k = -8; k <= 8; k++) {
         var want = a.x + k * S;
         if (want < x0 || want > x1) continue;
         var nearest = null, nearestErr = Infinity;
         for (var j = 0; j < peaks.length; j++) {
+          if (used[j] || !sameVerticalBand(a, peaks[j]) || !sameVerticalBand(b, peaks[j])) continue;
           var e = Math.abs(peaks[j].x - want);
           if (e < nearestErr) { nearestErr = e; nearest = peaks[j]; }
         }
         if (nearest && nearestErr <= tol) {
+          used[peaks.indexOf(nearest)] = 1;
           assigned.push({ line: nearest, idx: k, err: nearestErr });
         }
       }
@@ -829,7 +911,16 @@
         for (var gap = 1; gap <= 4; gap++) consider(peaks[i], peaks[j2], gap);
       }
     }
-    if (!best) return { lines: [], spacingPx: NaN, count: 0, error: '未找到等距刻线' };
+    if (!best) {
+      return {
+        lines: [], spacingPx: NaN, count: 0, error: '未找到等距刻线',
+        debug: {
+          peaks: peaks.slice(0, 20).map(function (q5) {
+            return { x: q5.x, y0: q5.y0, y1: q5.y1, widthPx: q5.widthPx };
+          })
+        }
+      };
+    }
 
     // 对命中的刻线做线性拟合，缺失一条时仍能得到单格间距。
     var assigned = best.assigned;
@@ -863,7 +954,12 @@
       y0: y0,
       y1: y1,
       width: width,
-      height: height
+      height: height,
+      debug: {
+        peaks: peaks.slice(0, 20).map(function (q7) {
+          return { x: q7.x, y0: q7.y0, y1: q7.y1, widthPx: q7.widthPx };
+        })
+      }
     };
   }
 
@@ -979,18 +1075,41 @@
       } else {
         throw new Error('请等待自动识别，或手点两条刻线');
       }
-      var r = BP.physics.pixelScale({ L: num('retL'), N: N });
-      BP.store.saveK(r.k, { L: num('retL'), N: N, source: source });
-      syncKToSession(r.k, { L: num('retL'), N: N, source: source });
+      var L = num('retL');
+      var LSource = reticleLSource();
+      var r = BP.physics.pixelScale({ L: L, N: N });
+      BP.store.saveK(r.k, {
+        L: L, N: N, source: source, L_source: LSource
+      });
+      syncKToSession(r.k, {
+        L: L, N: N, source: source, L_source: LSource
+      });
       renderK();
       BP.ui.result($('retResult'), [
         { label: nLabel, value: F.px(N) + ' px' },
-        { label: '相邻刻线实际间距 L', value: F.mm(num('retL')) + ' mm' },
+        {
+          label: '相邻刻线实际间距 L',
+          value: F.mm(L) + ' mm',
+          cls: LSource === '手动输入' ? '' : 'is-warn'
+        },
+        {
+          label: 'L 来源',
+          value: LSource,
+          cls: LSource === '手动输入' ? '' : 'is-warn'
+        },
         { label: '标定方式', value: source },
         { label: 'k = L / N', value: F.sci(r.k) + ' mm/px', cls: 'is-key' }
       ]);
       show('retResult', true);
     } catch (e) { fail(e); }
+  }
+
+  /* 默认 L=5 mm 只来自报告参数，用户未改时必须保留待核实标记。 */
+  function reticleLSource() {
+    var field = $('retL');
+    return field && field.dataset.userEdited === '1'
+      ? '手动输入'
+      : '报告预设，待核实';
   }
 
   /* ---------------- 波长表 ---------------- */
@@ -1105,7 +1224,7 @@
     addCombineRow('比值法', 589.33, 0.61);
     addCombineRow('横向放大率法', 589.28, 0.84);
     addCombineRow('光线追迹法', 589.30, 0.78);
-    BP.ui.alert('已填入表 5.2 的三条路径', 'ok');
+    BP.ui.alert('已填入表 5.2 三条路径的报告预设，不代表当前实测', 'info');
   }
 
   function calcWeightedCombine() {
@@ -1276,6 +1395,10 @@
       var field = $(id);
       if (field) field.addEventListener('input', function () { field.dataset.sessionManual = '1'; });
     });
+    var retL = $('retL');
+    if (retL) {
+      retL.addEventListener('input', function () { retL.dataset.userEdited = '1'; });
+    }
     if (BP.sessions && !BP.sessions.listSessions().length) {
       BP.sessions.createSession({ method: 'ratio', title: '现场采集' });
     }

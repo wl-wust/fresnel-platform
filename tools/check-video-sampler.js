@@ -36,9 +36,11 @@ assert(picked[0].score >= picked[1].score, '候选池排序应稳定');
 const stable = Array.from({ length: 20 }, (_, i) => ({
   ...good,
   timeMs: i * 500,
+  stripeCount: 12 + (i % 2),
   deltaXPx: 163.3 + (i % 2 ? 0.1 : -0.1)
 }));
 assert.strictEqual(S.summary(stable).n, 20, '应统计全部有效候选');
+assert.strictEqual(S.summary(stable).meanStripeCount, 12.5, '应统计平均可见条纹数');
 assert.strictEqual(S.summary(stable).cv <= 0.005, true, '示例数据应满足稳定度');
 assert.strictEqual(S.isEnough(stable, 20), true, '20 个稳定候选应判定为足够');
 assert.strictEqual(S.isEnough(stable.slice(0, 19), 20), false, '不足目标数时不应提示足够');
@@ -70,5 +72,26 @@ assert.strictEqual(samplePlan.length, 20, '10 秒视频应按 0.5 秒生成 20 �
 assert.strictEqual(samplePlan[0], 0, '采样应从视频开头开始');
 assert.strictEqual(samplePlan[samplePlan.length - 1], 9.5, '采样点不应越过视频结尾');
 assert.strictEqual(S.sampleTimes(2, 0.5).length, 4, '短片段也应按固定间隔采样');
+assert.strictEqual(S.adaptiveGap(8.692), 0.2, '8.7 秒短片应采用 0.2 秒覆盖采样');
+assert.strictEqual(S.adaptiveGap(44.159), 0.5, '44 秒视频应保持 0.5 秒采样');
+assert.strictEqual(S.adaptiveGap(600), 1, '十分钟视频应采用 1 秒采样以限制解码次数');
+assert.strictEqual(S.recommendedTarget(8.692, 20), 5, '短片应显式切换为 5 帧参考目标');
+assert.strictEqual(S.recommendedTarget(44.159, 20), 20, '长视频应保留用户目标帧数');
+assert.strictEqual(S.recommendedTarget(8.692, 5), 5, '用户已选 5 帧时不应改变');
+assert.strictEqual(
+  typeof S.planImportTargets,
+  'function',
+  '应提供短片自动目标后的下一次导入恢复策略'
+);
+assert.deepStrictEqual(
+  S.planImportTargets(44.159, 5, 20),
+  { requestedTarget: 20, effectiveTarget: 20, autoAdjusted: false, restored: true },
+  '短片自动切到 5 帧后，下一段长视频应恢复上次显式目标'
+);
+assert.deepStrictEqual(
+  S.planImportTargets(44.159, 5, 5),
+  { requestedTarget: 5, effectiveTarget: 5, autoAdjusted: false, restored: false },
+  '用户手动选择 5 帧后，长视频应尊重用户选择'
+);
 
-console.log('视频抽帧评分检查通过（17 项）');
+console.log('视频抽帧评分检查通过（27 项）');

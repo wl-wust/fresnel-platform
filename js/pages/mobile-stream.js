@@ -1,6 +1,6 @@
 /* =========================================================================
  * pages/mobile-stream.js —— 手机扫码后的摄像头推流页
- * 依赖：vendor/peerjs.min.js
+ * 依赖：live/lan-signaling.js、vendor/peerjs.min.js
  * ========================================================================= */
 (function (global) {
   'use strict';
@@ -20,6 +20,7 @@
   var stream = null;
   var peer = null;
   var call = null;
+  var lanSender = null;
   var facing = 'environment';
   var starting = false;
   var switching = false;
@@ -110,6 +111,9 @@
     if (stopping) return;
     stopping = true;
     clearSignalingTimer();
+    if (lanSender) {
+      try { lanSender.close(); } catch (e0) { /* 已关闭时忽略 */ }
+    }
     if (call) {
       try { call.close(); } catch (e) { /* 已断开时忽略 */ }
     }
@@ -120,6 +124,7 @@
     stream = null;
     peer = null;
     call = null;
+    lanSender = null;
     starting = false;
     video.srcObject = null;
     setStarted(false);
@@ -129,6 +134,24 @@
     stopping = false;
   }
 
+  function handleConnectionState(state) {
+    if (stopping) return;
+    if (state === 'connected') {
+      setConnection('已连接', true);
+      setStatus('画面正在向电脑传输');
+      if (navigator.vibrate) navigator.vibrate(60);
+    } else if (state === 'connecting') {
+      setConnection('连接中', false);
+      setStatus('正在建立点对点视频连接…');
+    } else if (state === 'disconnected') {
+      setConnection('连接中断', false);
+      setStatus('网络暂时中断，正在尝试恢复…', true);
+    } else if (state === 'failed') {
+      setConnection('连接失败', false);
+      setStatus('连接失败，请确认手机和电脑网络可用后重新扫码', true);
+    }
+  }
+
   function watchConnection() {
     if (!call || !call.peerConnection) {
       setStatus('已开始向电脑传输画面');
@@ -136,22 +159,37 @@
     }
     var pc = call.peerConnection;
     pc.addEventListener('connectionstatechange', function () {
-      if (stopping) return;
-      if (pc.connectionState === 'connected') {
-        setConnection('已连接', true);
-        setStatus('画面正在向电脑传输');
-        if (navigator.vibrate) navigator.vibrate(60);
-      } else if (pc.connectionState === 'connecting') {
-        setConnection('连接中', false);
-        setStatus('正在建立点对点视频连接…');
-      } else if (pc.connectionState === 'disconnected') {
-        setConnection('连接中断', false);
-        setStatus('网络暂时中断，正在尝试恢复…', true);
-      } else if (pc.connectionState === 'failed') {
-        setConnection('连接失败', false);
-        setStatus('连接失败，请确认手机和电脑网络可用后重新扫码', true);
-      }
+      handleConnectionState(pc.connectionState);
     });
+  }
+
+  function signalLan() {
+    var settings = global.BP_LAN_SIGNAL || {};
+    clearSignalingTimer();
+    setConnection('连接中', false);
+    setStatus('正在连接电脑端局域网信令…');
+    try {
+      lanSender = global.BP.lanSignal.createSenderConnection({
+        room: room,
+        token: token,
+        path: settings.websocketPath || '/lan-signal',
+        stream: stream,
+        onOpen: function () {
+          setStatus('已连上电脑，正在建立视频连接…');
+        },
+        onState: handleConnectionState,
+        onError: function (error) {
+          if (stopping) return;
+          setConnection('连接失败', false);
+          setStatus(error.message || '局域网视频连接失败', true);
+        },
+        onClosed: function (reason) {
+          if (!stopping) stop(reason || '局域网连接已断开');
+        }
+      });
+    } catch (error) {
+      stop(error.message || '无法启动局域网推流');
+    }
   }
 
   function signalPeer() {
@@ -221,7 +259,11 @@
       updateMeta();
       setStarted(true);
       setStatus('摄像头已开启，正在连接电脑…');
-      signalPeer();
+      if (global.BP.lanSignal && global.BP.lanSignal.isLanEnabled(global)) {
+        signalLan();
+      } else {
+        signalPeer();
+      }
     } catch (error) {
       stop(cameraError(error));
     } finally {
@@ -230,7 +272,8 @@
   }
 
   async function switchCamera() {
-    if (!stream || switching || !call || !call.peerConnection) return;
+    if (!stream || switching) return;
+    if (!lanSender && (!call || !call.peerConnection)) return;
     switching = true;
     switchButton.disabled = true;
     var oldStream = stream;
@@ -238,14 +281,22 @@
     try {
       var nextStream = await acquireCamera(nextFacing);
       var nextTrack = nextStream.getVideoTracks()[0];
-      var sender = call.peerConnection.getSenders().filter(function (item) {
-        return item.track && item.track.kind === 'video';
-      })[0];
-      if (!sender || !sender.replaceTrack) {
-        stopTracks(nextStream);
-        throw new Error('当前浏览器不支持直播中切换镜头');
+      if (lanSender) {
+        var replaced = await lanSender.replaceVideoTrack(nextTrack);
+        if (!replaced) {
+          stopTracks(nextStream);
+          throw new Error('当前浏览器不支持直播中切换镜头');
+        }
+      } else {
+        var sender = call.peerConnection.getSenders().filter(function (item) {
+          return item.track && item.track.kind === 'video';
+        })[0];
+        if (!sender || !sender.replaceTrack) {
+          stopTracks(nextStream);
+          throw new Error('当前浏览器不支持直播中切换镜头');
+        }
+        await sender.replaceTrack(nextTrack);
       }
-      await sender.replaceTrack(nextTrack);
       stream = nextStream;
       facing = nextFacing;
       video.srcObject = nextStream;

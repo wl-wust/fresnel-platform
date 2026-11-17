@@ -143,16 +143,16 @@
     return { x0: x0, y0: y0, x1: x1, y1: y1 };
   }
 
-  function centerRoi(signal, width, height) {
+  function centerRoi(signal, width, height, scale) {
     var threshold = otsuThreshold(signal);
     var bounds = activeBounds(signal, width, height, Math.max(4, threshold));
     if (!bounds) throw new Error('图像中没有明显发光区域');
     var bw = bounds.x1 - bounds.x0 + 1, bh = bounds.y1 - bounds.y0 + 1;
     var x0, y0, rw, rh;
     if (bw >= width * 0.9 && bh >= height * 0.9) {
-      rw = width * 0.96; rh = height * 0.96;
+      rw = width * Math.min(0.96, scale); rh = height * Math.min(0.96, scale);
     } else {
-      rw = bw * 0.78; rh = bh * 0.78;
+      rw = bw * scale; rh = bh * scale;
     }
     var cx = (bounds.x0 + bounds.x1) / 2, cy = (bounds.y0 + bounds.y1) / 2;
     x0 = Math.max(0, Math.round(cx - rw / 2));
@@ -330,32 +330,112 @@
   function analyzeImageData(data, width, height, opts) {
     opts = opts || {};
     var signal = signalFromImageData(data, width, height);
-    var roi = centerRoi(signal, width, height);
-    var direction;
-    try {
-      direction = searchOrientation(signal, width, height, roi);
-    } catch (e) {
-      throw new Error('横竖及斜向都没有找到稳定周期性条纹。请裁到中央黄色视场，并避开蓝斑');
+    // 由外向内尝试四个同心 ROI。视场边缘、暗角和局部反光会污染大 ROI，
+    // 但只要中央清晰区域仍满足原有门限，就可以在不放宽标准的前提下提取条纹。
+    var scales = [0.78, 0.58, 0.46, 0.36], candidates = [], lastError = null;
+    for (var si = 0; si < scales.length; si++) {
+      var roi, direction, prof;
+      try {
+        roi = centerRoi(signal, width, height, scales[si]);
+        direction = searchOrientation(signal, width, height, roi);
+        var samples = sampleRoi(signal, width, roi, 1);
+        prof = projectSamples(samples, direction.angle * Math.PI / 180);
+        var candidate = analyzeProfile(prof, opts);
+        if ((candidate.acfPeak || 0) < (opts.minAcf || 0.2)) {
+          throw new Error('条纹周期性不足（自相关 ' +
+                          ((candidate.acfPeak || 0) * 100).toFixed(1) + '%）');
+        }
+        if ((candidate.spectralSnr || 0) < (opts.minSnr || 3)) {
+          throw new Error('条纹频谱峰不够明显（信噪比 ' +
+                          (candidate.spectralSnr || 0).toFixed(1) + '）');
+        }
+        // 至少覆盖三个完整周期，避免过小 ROI 把半周期或边界起伏当成基频。
+        if (prof.length / candidate.periodPx < 3) {
+          throw new Error('有效条纹区域不足三个周期');
+        }
+        candidate.direction = direction;
+        candidate.profile = prof;
+        candidate.roi = roi;
+        candidate.roiScale = scales[si];
+        candidate.score = scoreOf(candidate);
+        candidates.push(candidate);
+      } catch (e) {
+        lastError = e;
+      }
     }
-    var samples = sampleRoi(signal, width, roi, 1);
-    var prof = projectSamples(samples, direction.angle * Math.PI / 180);
-    var r = analyzeProfile(prof, opts);
-    if ((r.acfPeak || 0) < (opts.minAcf || 0.2)) {
-      throw new Error('条纹周期性不足（自相关 ' + ((r.acfPeak || 0) * 100).toFixed(1) + '%）');
+    // 先按周期把同心 ROI 的结果聚类，再优先采用“更多 ROI 支持”的周期。
+    // 这样外围单独给出的 77px 低频结构不会压过中外两层共同给出的 35px 真条纹。
+    var best = null, bestSupport = 0;
+    for (var ci = 0; ci < candidates.length; ci++) {
+      if (candidates[ci].used) continue;
+      var cluster = [candidates[ci]], totalScore = candidates[ci].score;
+      candidates[ci].used = true;
+      for (var cj = ci + 1; cj < candidates.length; cj++) {
+        if (candidates[cj].used) continue;
+        var relativePeriod = Math.abs(candidates[ci].periodPx - candidates[cj].periodPx) /
+                             candidates[ci].periodPx;
+        if (relativePeriod <= 0.10) {
+          candidates[cj].used = true;
+          cluster.push(candidates[cj]);
+          totalScore += candidates[cj].score;
+        }
+      }
+      var member = cluster.reduce(function (a, b) {
+        return !a || b.score > a.score ? b : a;
+      }, null);
+      var support = cluster.length;
+      if (support > bestSupport ||
+          (support === bestSupport && totalScore > best.totalSupportScore)) {
+        best = member;
+        bestSupport = support;
+        best.totalSupportScore = totalScore;
+      }
     }
-    if ((r.spectralSnr || 0) < (opts.minSnr || 3)) {
-      throw new Error('条纹频谱峰不够明显（信噪比 ' + (r.spectralSnr || 0).toFixed(1) + '）');
+    // 中央最内层若独立给出且通过原有质量门限，说明外围周期来自视场边缘；
+    // 该结论必须在至少五个完整周期下才生效，防止小块纹理制造短周期。
+    if (best && candidates.length > 1) {
+      var innermost = candidates.reduce(function (a, b) {
+        return b.roiScale < a.roiScale ? b : a;
+      }, candidates[0]);
+      var innerCross = isFinite(innermost.periodPxCross)
+        ? Math.abs(innermost.periodPx - innermost.periodPxCross) / innermost.periodPx
+        : 1;
+      var innerRelative = Math.abs(innermost.periodPx - best.periodPx) / best.periodPx;
+      if (innermost !== best && innerCross <= 0.02 && innerRelative > 0.10 &&
+          innermost.profile.length / innermost.periodPx >= 5) {
+        best = innermost;
+      }
     }
-    var stripeAngle = (direction.angle + 90) % 180;
-    r.axis = angleDistance(stripeAngle, 90) <= 12 ? 'x' :
-             (angleDistance(stripeAngle, 0) <= 12 ? 'y' : 'oblique');
-    r.directionDeg = direction.angle;
-    r.stripeAngleDeg = stripeAngle;
-    r.roi = roi;
-    r.signal = 'R/G';
-    r.profile = prof;
-    r.width = width; r.height = height;
-    return r;
+    if (!best) {
+      var detail = lastError && /周期性|频谱|条纹/.test(lastError.message)
+        ? '；最近原因：' + lastError.message
+        : '';
+      throw new Error('横竖及斜向都没有找到稳定周期性条纹。请裁到中央黄色视场，并避开蓝斑' + detail);
+    }
+    var result = best;
+    var stripeAngle = (result.direction.angle + 90) % 180;
+    result.axis = angleDistance(stripeAngle, 90) <= 12 ? 'x' :
+                  (angleDistance(stripeAngle, 0) <= 12 ? 'y' : 'oblique');
+    result.directionDeg = result.direction.angle;
+    result.stripeAngleDeg = stripeAngle;
+    result.roi = best.roi;
+    result.signal = 'R/G';
+    result.profile = best.profile;
+    result.width = width; result.height = height;
+    // 可见条纹数只用于数据摘要，不参与 Δx 或波长公式。
+    result.stripeCount = Math.max(1, Math.floor(result.profile.length / result.periodPx) + 1);
+    result.roiCandidates = candidates.map(function (item) {
+      return {
+        scale: item.roiScale,
+        periodPx: item.periodPx,
+        periodPxCross: item.periodPxCross,
+        crossDiff: isFinite(item.periodPxCross)
+          ? Math.abs(item.periodPx - item.periodPxCross) / item.periodPx
+          : 1,
+        score: item.score
+      };
+    });
+    return result;
   }
 
   /* ---------------- 浏览器：文件 → 像素 → Δx ---------------- */

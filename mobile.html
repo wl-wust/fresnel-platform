@@ -81,9 +81,10 @@
       <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">相册选择</button>
       <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none" onchange="handleFile(event)">
     </div>
+    <p class="hint">手机端负责拍照与局域网推流；大视频批量导入放在 PC 端，避免手机解码中断或内存不足。</p>
 
     <div class="params-box">
-      <h4>本批参数（报告表 5.1）</h4>
+      <h4>本批参数（报告表 5.1 预设，不是实测）</h4>
       <div class="param-row"><label for="param_d">d (mm)</label><input type="number" id="param_d" value="0.90213" step="0.00001"></div>
       <div class="param-row"><label for="param_D">D (mm)</label><input type="number" id="param_D" value="1000" step="1"></div>
       <div class="param-row"><label>当前 k (mm/px)</label><span id="curK" class="k-display">未标定</span></div>
@@ -122,6 +123,7 @@
       <canvas id="reticleCanvas" width="300" height="200" style="width:100%;max-width:360px;background:#111;border-radius:8px"></canvas>
       <div class="param-row"><label>识别/标定结果</label><span id="retPix">—</span></div>
       <div class="param-row"><label for="retL">相邻刻线实际间距 (mm)</label><input type="number" id="retL" value="5" step="0.01"></div>
+      <p class="hint">默认 5 mm 是报告表预设，必须按实际分划板核对；留用时会明确标注“预设，待核实”。</p>
       <button class="btn-calc" onclick="calcReticle()">计算并保存 k</button>
     </div>
 
@@ -138,6 +140,7 @@
   <!-- ================= 分析 ================= -->
   <div id="analysis" class="tab-page">
     <h3>快速校验</h3>
+    <p class="hint">手机端保留四种测量方法的会话数据汇总；完整分方法计算卡与大视频批量导入放在 PC 端，避免小屏重复录入和移动端解码中断。</p>
     <div class="compare-section">
       <h4>当前会话自动填入</h4>
       <p class="hint">按当前测量方法读取已识别帧；缺项会列出原因，不会用固定值冒充测量值。</p>
@@ -172,7 +175,7 @@
         </table>
         <button class="btn-add" onclick="addCombineRow()">+ 添加路径</button>
         <button class="btn-calc-all" onclick="calcWeightedCombine()">执行加权合成</button>
-        <button class="btn-secondary" onclick="fillReportPaths()">填入表 5.2 三路径</button>
+        <button class="btn-secondary" onclick="fillReportPaths()">填入报告三路径（表 5.2，非实测）</button>
       </div>
       <div id="combineResult" class="result-box" style="display:none"></div>
     </div>
@@ -246,6 +249,8 @@
 <script src="js/core/sessions.js?v=b6fd19c"></script>
 <script src="js/core/fringe.js?v=b6fd19c"></script>
 <script src="js/core/session-data.js?v=b6fd19c"></script>
+<script src="lan-config.js?v=b6fd19c"></script>
+<script src="js/live/lan-signaling.js?v=b6fd19c"></script>
 <script src="js/pages/mobile.js?v=b6fd19c"></script>
 <script src="vendor/peerjs.min.js?v=b6fd19c"></script>
 <script src="js/pages/mobile-stream.js?v=b6fd19c"></script>

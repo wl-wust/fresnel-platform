@@ -1,7 +1,7 @@
 # 菲涅耳双棱镜干涉实验 · 纯前端平台
 
 配合《菲涅耳双棱镜干涉实验的装置改进与计算方法优化》研究报告。
-**纯静态、零依赖、零安装**：不需要服务器，不需要 npm，打开网页即用。
+**默认纯静态、零安装**；现场手机实时推流可双击 `start-lan-video.cmd` 启用局域网服务。
 
 > 数值口径与报告 **表 5.1 / 5.2 / 6.1 / 8.1** 逐位对齐，且由自检脚本守住（见文末）。
 
@@ -36,6 +36,19 @@
 2. **拍照**：相机需要 **https**（GitHub Pages 已满足），且 iOS Safari 必须由**用户手势**触发。用本地文件（`file://`）打开时相机不可用，请用「相册选择」。
 3. **分析**：填 d、D、条纹间距 →「全部计算」→ λ。多路径合成卡可当场看 χ² 是否一致。
 4. **导出记录**：生成 `record.json`（只存原始量，不存结论——换口径不会留下旧数）。
+
+### 手机实时推流（实验室局域网）
+
+1. 首次双击 `install-lan-autostart.cmd`，安装当前用户登录自启；之后 PC 固定打开 `https://localhost:52224/`，服务异常退出会自动重启。
+2. 手机与电脑连接同一个 Wi-Fi；PC 进入“图像分析 → 实时最佳帧采集”后生成二维码。
+3. 二维码会自动使用电脑当前局域网 IP，换 Wi-Fi 后无需改代码。手机首次打开选择“高级/继续访问”，并允许摄像头。
+4. Windows 防火墙弹窗时允许 Node.js 访问专用网络。临时停用可运行：
+
+```powershell
+Unregister-ScheduledTask -TaskName "FresnelPlatformLAN" -Confirm:$false
+```
+
+该路径的网页、证书和 WebSocket 信令都在本机运行，不依赖 GitHub Pages、PeerJS 或公网。公网静态页仍保留 PeerJS 降级路径；若局域网不可用，直接导入手机视频也能完成最佳帧分析。临时前台启动可双击 `start-lan-video.cmd`。
 
 ### 光学页（`optical.html`）
 
@@ -84,6 +97,9 @@ node tools/check-globals.js         #  let/const 绑定被误当 window 属性
 node tools/check-ids.js             #  JS 引用的 DOM id 是否存在
 node tools/check-deploy.js          # 部署文件与设计侧逐字节一致
 node tools/check-versions.js        # 三页 ?v= 版本号一致
+node tools/check-lan-signaling.js   # 局域网信令、房间与 token
+node tools/check-lan-client.js      # PC/手机端 LAN 接线
+python tools/check-lan-video-browser.py  # HTTPS + 摄像头 + WebRTC 实测
 ```
 
 `tools/selftest.js` 里的金标准（`tools/golden.json`）**只认研究报告**，不认任何实现。

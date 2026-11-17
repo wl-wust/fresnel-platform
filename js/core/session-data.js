@@ -48,8 +48,14 @@
       uA: sigma === null ? null : sigma / Math.sqrt(values.length)
     };
   }
-  function sourceForRole(label, n) {
-    return n ? SOURCE.auto + '（' + label + '，' + n + ' 帧均值）' : null;
+  function sourceForRole(label, n, meanStripeCount, qualityStatus) {
+    if (!n) return null;
+    // 旧会话可能没有条纹数；严格数值判断可避免把 null 误显示成 0.0 条。
+    var stripes = Number.isFinite(meanStripeCount)
+      ? '，平均 ' + Number(meanStripeCount).toFixed(1) + ' 条条纹'
+      : '';
+    var quality = qualityStatus === 'reference-only' ? '，波动偏大，仅参考' : '';
+    return SOURCE.auto + '（' + label + '，' + n + ' 帧均值' + stripes + quality + '）';
   }
   function missing(list, key, label, reason) {
     list.push({ key: key, label: label, reason: reason });
@@ -80,6 +86,11 @@
     v = options ? numberOrNull(options.k) : null;
     return v !== null && v > 0 ? v : null;
   }
+  function calibrationDetail(session) {
+    var c = session && session.calibration;
+    if (!c || !finite(c.k_mm_px)) return '';
+    return c.L_source ? 'L 来源：' + c.L_source : '';
+  }
   function roleFrameList(session, role) {
     var all = session && session.frames ? session.frames : [];
     return all.filter(function (frame) {
@@ -90,15 +101,21 @@
     var frames = roleFrameList(session, role);
     var px = [];
     var mm = [];
+    var stripes = [];
     frames.forEach(function (frame) {
       var dxPx = numberOrNull(frame.deltaXPx);
       var dxMm = numberOrNull(frame.deltaXmm);
       if (dxPx !== null) px.push(dxPx);
       if (dxMm === null && dxPx !== null && k > 0) dxMm = dxPx * k;
       if (dxMm !== null) mm.push(dxMm);
+      var stripeCount = numberOrNull(frame.stripeCount);
+      if (stripeCount !== null && stripeCount > 0) stripes.push(stripeCount);
     });
     var pxStats = sampleStats(px);
     var mmStats = sampleStats(mm);
+    var referenceOnly = frames.some(function (frame) {
+      return frame.selection && frame.selection.referenceOnly === true;
+    });
     return {
       role: role,
       frames: frames,
@@ -108,7 +125,9 @@
       meanPx: pxStats.mean,
       sdPx: pxStats.sd,
       meanMm: mmStats.mean,
-      sdMm: mmStats.sd
+      sdMm: mmStats.sd,
+      meanStripeCount: mean(stripes),
+      qualityStatus: referenceOnly ? 'reference-only' : 'standard'
     };
   }
   function roleSource(result, role, label, data, unit) {
@@ -118,7 +137,9 @@
       return;
     }
     result.sources[unit] = SOURCE.auto;
-    result.sourceDetails[unit] = sourceForRole(label, data.n);
+    result.sourceDetails[unit] = sourceForRole(
+      label, data.n, data.meanStripeCount, data.qualityStatus
+    );
   }
   function lambdaStats(primary, fn) {
     var values = [];
@@ -150,7 +171,8 @@
     var sodium = roleData(session, 'sodium', k);
     roleSource(result, 'sodium', '钠光条纹', sodium, 'dxNaPx');
     if (sodium.meanPx !== null) result.values.dxNaPx = sodium.meanPx;
-    put(result, 'k', k, '像素当量 k', SOURCE.calibration);
+    var kValue = put(result, 'k', k, '像素当量 k', SOURCE.calibration);
+    if (kValue !== null) result.sourceDetails.k = calibrationDetail(session);
     var d = put(result, 'd', param(session, 'd'), '虚光源间距 d',
       paramSource(session, 'd', SOURCE.session));
     var D = put(result, 'D', param(session, 'D'), '观察距离 D',
@@ -246,7 +268,8 @@
     var sodium = roleData(session, 'sodium', k);
     roleSource(result, 'sodium', '钠光条纹', sodium, 'dxNaPx');
     if (sodium.meanPx !== null) result.values.dxNaPx = sodium.meanPx;
-    put(result, 'k', k, '像素当量 k', SOURCE.calibration);
+    var kValue = put(result, 'k', k, '像素当量 k', SOURCE.calibration);
+    if (kValue !== null) result.sourceDetails.k = calibrationDetail(session);
     var preset = session && session.trace ? session.trace :
       (global.BP.sessions ? global.BP.sessions.TRACE_PRESET : null);
     var d = put(result, 'd', preset ? preset.d_mm : null, '追迹 d', SOURCE.trace);

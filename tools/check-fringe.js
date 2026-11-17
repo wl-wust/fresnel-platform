@@ -59,10 +59,82 @@ function makeImage(w, h, vertical) {
 const vImg = makeImage(600, 200, true);
 const rv = fringe.analyzeImageData(vImg.data, vImg.width, vImg.height, { k: 0.004 });
 check('竖条纹 → 选到 x 轴', rv.axis === 'x', 'axis=' + rv.axis + '  周期=' + rv.periodPx.toFixed(2) + 'px');
+check('识别结果包含可见条纹数',
+      Number.isFinite(rv.stripeCount) && rv.stripeCount > 0,
+      'stripeCount=' + rv.stripeCount);
 
 const hImg = makeImage(200, 600, false);
 const rh = fringe.analyzeImageData(hImg.data, hImg.width, hImg.height, { k: 0.004 });
 check('横条纹 → 选到 y 轴', rh.axis === 'y', 'axis=' + rh.axis + '  周期=' + rh.periodPx.toFixed(2) + 'px');
+
+/* 圆形视场边缘带有低频亮暗结构时，固定 78% ROI 可能把边缘包络误当成
+ * 77px 周期；中央区域仍保留真实的 35px 条纹。这里用合成图固定该回归场景。 */
+function makeVignetteImage(width, height, periodPx) {
+  const data = new Uint8ClampedArray(width * height * 4);
+  const cx = (width - 1) / 2;
+  const cy = (height - 1) / 2;
+  const radius = 430;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const distance = Math.hypot((x - cx) / radius, (y - cy) / radius);
+      const inside = distance <= 1 ? 1 : 0;
+      const radial = Math.max(0, 1 - distance * distance);
+      const edgeWeight = Math.pow(Math.abs(x - cx) / radius, 1.5);
+      const fine = 0.28 * Math.cos(2 * Math.PI * x / periodPx);
+      const edgeEnvelope = 0.9 * edgeWeight * Math.cos(2 * Math.PI * x / 77.4);
+      const value = Math.max(
+        0,
+        Math.min(255, Math.round(255 * inside * radial * (0.55 + fine + edgeEnvelope))),
+      );
+      const p = (y * width + x) * 4;
+      data[p] = data[p + 1] = data[p + 2] = value;
+      data[p + 3] = 255;
+    }
+  }
+  return { data, width, height };
+}
+
+const vignette = makeVignetteImage(720, 1280, 35);
+const rvignette = fringe.analyzeImageData(vignette.data, vignette.width, vignette.height, { k: 0.004 });
+check('圆形视场边缘不产生 77px 假基频',
+      Math.abs(rvignette.periodPx - 35) < 1,
+      '测得 ' + rvignette.periodPx.toFixed(2) + 'px，ROI ' +
+      rvignette.roi.width + '×' + rvignette.roi.height);
+
+/* 更严格的情况：外围的低频亮暗结构本身也能通过零交叉检查，但真实条纹
+ * 只集中在中央。必须比较同心 ROI 的周期，不能看到第一个一致值就停止。 */
+function makeCenterFringeImage(width, height, finePeriodPx, envelopePeriodPx) {
+  const data = new Uint8ClampedArray(width * height * 4);
+  const cx = (width - 1) / 2;
+  const cy = (height - 1) / 2;
+  const radius = 430;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const distance = Math.hypot((x - cx) / radius, (y - cy) / radius);
+      const inside = distance <= 1 ? 1 : 0;
+      const radial = Math.max(0, 1 - distance * distance);
+      const fineWeight = Math.exp(-Math.pow((x - cx) / (radius * 0.25), 2) / 2);
+      const fine = 0.32 * fineWeight * Math.cos(2 * Math.PI * x / finePeriodPx);
+      const envelope = 0.35 * Math.cos(2 * Math.PI * x / envelopePeriodPx);
+      const value = Math.max(
+        0,
+        Math.min(255, Math.round(255 * inside * radial * (0.65 + fine + envelope))),
+      );
+      const p = (y * width + x) * 4;
+      data[p] = data[p + 1] = data[p + 2] = value;
+      data[p + 3] = 255;
+    }
+  }
+  return { data, width, height };
+}
+
+const centerFringe = makeCenterFringeImage(720, 1280, 35, 77);
+const rcenter = fringe.analyzeImageData(
+  centerFringe.data, centerFringe.width, centerFringe.height, { k: 0.004 },
+);
+check('中央真实条纹优先于可自洽的外围低频结构',
+      Math.abs(rcenter.periodPx - 35) < 1,
+      '测得 ' + rcenter.periodPx.toFixed(2) + 'px，ROI 比例 ' + rcenter.roiScale);
 
 check('两个方向都给出 Δx(mm)', Math.abs(rv.deltaXmm - 120 * 0.004) < 0.002,
       rv.deltaXmm.toFixed(4) + ' mm（真值 ' + (120 * 0.004).toFixed(4) + '）');

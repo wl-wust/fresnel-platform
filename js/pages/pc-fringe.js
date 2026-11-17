@@ -116,7 +116,10 @@
           size: input.files[0].size,
           deltaXPx: r.periodPx,
           deltaXmm: r.deltaXmm,
+          stripeCount: r.stripeCount,
           quality: r.visibility,
+          source: 'photo',
+          sourceName: input.files[0].name,
           analysis: {
             axis: r.axis,
             visibility: r.visibility,
@@ -125,7 +128,8 @@
             roi: r.roi,
             signal: r.signal,
             spectralSnr: r.spectralSnr,
-            acfPeak: r.acfPeak
+            acfPeak: r.acfPeak,
+            stripeCount: r.stripeCount
           }
         }).then(function () {
           if (BP.pages && BP.pages.pc && BP.pages.pc.renderPcSession) {

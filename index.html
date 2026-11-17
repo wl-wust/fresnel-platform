@@ -49,7 +49,7 @@
       <div class="video-panel-heading">
         <div>
           <h3 id="videoPanelTitle">实时最佳帧采集</h3>
-          <p class="hint">手机扫码推流，或在下方导入视频分析</p>
+          <p class="hint">LAN 局域网扫码推流（手机与电脑需连接同一 Wi-Fi），或导入视频分析</p>
         </div>
         <span id="videoConnectionBadge" class="video-connection-badge">未连接</span>
       </div>
@@ -68,6 +68,7 @@
         </label>
         <label>目标帧数
           <select id="videoTargetSelect">
+            <option value="5">5 帧（短片参考）</option>
             <option value="10">10 帧</option>
             <option value="20" selected>20 帧</option>
             <option value="30">30 帧</option>
@@ -115,6 +116,7 @@
   <!-- ================= 波长计算 ================= -->
   <div id="wavelength" class="tab-content">
     <h2>波长计算</h2>
+    <p class="hint">输入框默认值来自研究报告表 5.1，仅用于复现报告，不是当前实测；“从当前会话填入”会标明真实识别来源。</p>
     <div class="calc-grid">
 
       <div class="calc-card">
@@ -124,7 +126,7 @@
         <div class="form-group"><label for="pixel_size">k (mm/px) 像素当量</label><input type="number" id="pixel_size" step="0.0001" value="0.004"></div>
         <div class="form-group"><label for="fringe_period_px">Δx (px) 条纹间距</label><input type="number" id="fringe_period_px" step="0.1" value="163.3"></div>
         <button onclick="calcWavelength()">计算波长</button>
-        <button onclick="fillReportParams()">填入报告参数（表 5.1）</button>
+        <button onclick="fillReportParams()">填入报告预设（非实测）</button>
         <div id="wavelengthResult" class="result-box"></div>
       </div>
 
@@ -279,7 +281,7 @@
           </tbody>
         </table>
         <button onclick="addPathRow()">+ 添加路径</button>
-        <button onclick="fillReportPaths()">填入报告三路径（表 5.2）</button>
+        <button onclick="fillReportPaths()">填入报告三路径（表 5.2，非实测）</button>
         <div class="form-group"><label for="standard_value">标准值 (nm)</label><input type="number" id="standard_value" value="589.3" step="0.1"></div>
         <button onclick="comparePathsTable()">执行加权合成</button>
       </div>
@@ -320,6 +322,8 @@
 <script src="js/pages/pc.js?v=b6fd19c"></script>
 <script src="js/pages/pc-unc.js?v=b6fd19c"></script>
 <script src="js/pages/pc-fringe.js?v=b6fd19c"></script>
+<script src="lan-config.js?v=b6fd19c"></script>
+<script src="js/live/lan-signaling.js?v=b6fd19c"></script>
 <script src="vendor/qrcode.min.js?v=b6fd19c"></script>
 <script src="vendor/peerjs.min.js?v=b6fd19c"></script>
 <script src="js/core/video-sampler.js?v=b6fd19c"></script>

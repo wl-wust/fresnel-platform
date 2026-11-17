@@ -1,7 +1,7 @@
 /* =========================================================================
  * pages/pc-video.js —— 手机实时推流、自动抽帧与最佳帧确认
  * 依赖：core/sessions.js, core/fringe.js, core/video-sampler.js,
- *       vendor/peerjs.min.js, vendor/qrcode.min.js
+ *       live/lan-signaling.js, vendor/peerjs.min.js, vendor/qrcode.min.js
  * ========================================================================= */
 (function (global) {
   'use strict';
@@ -13,6 +13,7 @@
   var doc = global.document;
   var peer = null;
   var call = null;
+  var lanHost = null;
   var remoteStream = null;
   var candidates = [];
   var analysisTimer = null;
@@ -26,6 +27,7 @@
   var recordingGeneration = 0;
   var closingConnection = false;
   var importingVideo = false;
+  var explicitTarget = null;
   var workCanvas = doc.createElement('canvas');
   var frameCanvas = doc.createElement('canvas');
   var API;
@@ -117,9 +119,10 @@
     } catch (e) { /* 声音提示失败时保留页面状态提示 */ }
   }
 
-  function showQr(url) {
+  function showQr(url, lanMode) {
     var host = $('videoQrBox');
     host.textContent = '';
+    host.dataset.streamUrl = url;
     if (!global.QRCode) {
       host.textContent = '二维码组件未加载，请刷新页面';
       return;
@@ -132,13 +135,16 @@
       correctLevel: level
     });
     var hint = doc.createElement('span');
-    hint.textContent = '手机扫描后点一次“开启摄像头并连接”';
+    hint.textContent = lanMode
+      ? '手机与电脑连接同一 Wi-Fi；首次打开需接受本地证书提示'
+      : '手机扫描后点一次“开启摄像头并连接”';
     host.appendChild(hint);
   }
 
   function clearQr(message) {
     var host = $('videoQrBox');
     if (!host) return;
+    delete host.dataset.streamUrl;
     host.textContent = '';
     var title = doc.createElement('strong');
     title.textContent = '手机扫码推流';
@@ -184,8 +190,15 @@
       visibility: result.visibility,
       periodPxCross: result.periodPxCross,
       spectralSnr: result.spectralSnr,
-      acfPeak: result.acfPeak
+      acfPeak: result.acfPeak,
+      stripeCount: visibleStripeCount(result.profile, result.periodPx)
     };
+  }
+
+  // 由投影剖面跨度与主周期估算可见条纹数，仅作质量摘要，不参与波长公式。
+  function visibleStripeCount(profile, periodPx) {
+    if (!profile || !(profile.length > 0) || !(Number(periodPx) > 0)) return null;
+    return Math.max(1, Math.floor(profile.length / Number(periodPx)) + 1);
   }
 
   function revokePreview(item) {
@@ -241,7 +254,8 @@
       meta.className = 'video-candidate-meta';
       meta.textContent = item.deltaXPx.toFixed(1) + ' px · ' +
         Math.round(item.score * 100) + ' 分 · 可见度 ' +
-        (item.visibility * 100).toFixed(1) + '%';
+        (item.visibility * 100).toFixed(1) + '%' +
+        (isFinite(item.stripeCount) ? ' · 约 ' + item.stripeCount + ' 条' : '');
 
       var actions = doc.createElement('div');
       actions.className = 'video-candidate-actions';
@@ -261,14 +275,19 @@
 
     var stats = BP.videoSampler.summary(stablePicked);
     var cvText = isFinite(stats.cv) ? (stats.cv * 100).toFixed(2) + '%' : '—';
+    var stabilityOk = !isFinite(stats.cv) || stats.cv <= BP.videoSampler.DEFAULTS.maxCv;
     var stability = '';
-    if (stats.n >= config.target && (!isFinite(stats.cv) || stats.cv > BP.videoSampler.DEFAULTS.maxCv)) {
+    if (stats.n >= config.target && !stabilityOk) {
       stability = ' · 波动偏大';
     }
     statsHost.textContent = '候选 ' + candidates.length + ' / 目标 ' + config.target +
       ' · 入选 ' + stats.n + ' · 主频波动 ' + cvText + stability;
-    $('videoConfirmButton').disabled = stats.n < config.target;
-    $('videoConfirmButton').textContent = '确认加入当前角色（' + config.target + ' 帧）';
+    var referenceOnly = !stabilityOk && config.role === 'reference';
+    $('videoConfirmButton').disabled = stats.n < config.target ||
+      (!stabilityOk && config.role !== 'reference');
+    $('videoConfirmButton').textContent = referenceOnly
+      ? '确认写入参考角色（波动偏大）'
+      : '确认加入当前角色（' + config.target + ' 帧）';
 
     var enough = BP.videoSampler.isEnough(candidates, config.target);
     if (enough && !enoughAnnounced) {
@@ -324,6 +343,7 @@
           spectralSnr: result.spectralSnr || 0,
           acfPeak: result.acfPeak || 0,
           crossDiff: crossDiff,
+          stripeCount: result.stripeCount || visibleStripeCount(result.profile, result.periodPx),
           saturationRatio: countSaturation(image.data) / (width * height),
           source: sourceType,
           sourceName: sourceName,
@@ -539,8 +559,33 @@
       }
       if (video.readyState < 2) await waitForMediaEvent(video, 'loadeddata', 15000);
 
-      // 长视频自动放宽采样间隔，避免十分钟素材产生上千次解码。
-      var gap = Math.max(0.5, Math.ceil(video.duration / 600 * 2) / 2);
+      // 短片加密覆盖采样；长视频自动放宽间隔。单帧质量门限保持不变。
+      var selectedTarget = config.target;
+      var targetPlan = BP.videoSampler.planImportTargets(
+        video.duration,
+        selectedTarget,
+        explicitTarget
+      );
+      var requestedTarget = targetPlan.requestedTarget;
+      var effectiveTarget = targetPlan.effectiveTarget;
+      if (effectiveTarget !== requestedTarget) {
+        $('videoTargetSelect').value = String(effectiveTarget);
+        config = currentConfig();
+        setStatus(
+          '短片 ' + video.duration.toFixed(2) + ' s：采用 ' + effectiveTarget +
+          ' 帧参考目标（单帧质量门限未降低）',
+          'normal'
+        );
+      } else if (targetPlan.restored && selectedTarget !== effectiveTarget) {
+        $('videoTargetSelect').value = String(effectiveTarget);
+        config = currentConfig();
+        setStatus(
+          '已恢复上次显式目标 ' + effectiveTarget +
+          ' 帧（上一段短片的 5 帧仅用于该片段）',
+          'normal'
+        );
+      }
+      var gap = BP.videoSampler.adaptiveGap(video.duration);
       var times = BP.videoSampler.sampleTimes(video.duration, gap);
       var imported = [];
       var lastError = '';
@@ -566,6 +611,9 @@
         setBadge('分析完成', '');
         setStatus(
           '视频分析完成：有效入选 ' + stats.n + ' / ' + config.target +
+          '；采样间隔 ' + gap.toFixed(2) + ' s' +
+          (effectiveTarget !== requestedTarget ? '；短片参考目标已显式切换' :
+            (targetPlan.restored ? '；已恢复上次显式目标' : '')) +
           (lastError ? '；最近拒绝原因：' + lastError : ''),
           imported.length ? 'normal' : 'error'
         );
@@ -592,6 +640,9 @@
     var hadRecording = !!recorderHandle;
     var recordingSaved = hadRecording ? await stopRecording('') : false;
     try {
+      if (lanHost) {
+        try { lanHost.close(); } catch (e0) { /* 已关闭时忽略 */ }
+      }
       if (call) {
         try { call.close(); } catch (e) { /* 已关闭时忽略 */ }
       }
@@ -603,6 +654,7 @@
       }
       call = null;
       peer = null;
+      lanHost = null;
       remoteStream = null;
       currentSecret = '';
       var video = $('pcRemoteVideo');
@@ -626,17 +678,77 @@
     }
   }
 
+  function mobileStreamUrl(id, secret, baseUrl) {
+    var url = new URL('mobile.html', baseUrl || global.location.href);
+    url.searchParams.set('stream', '1');
+    url.searchParams.set('room', id);
+    url.searchParams.set('token', secret);
+    return url.href;
+  }
+
+  function lanMobileBaseUrl(settings) {
+    var lanHost = String(settings && settings.lanHost || '').trim();
+    if (!lanHost) return global.location.href;
+    var port = Number(settings.lanPort) || Number(global.location.port) || 52224;
+    return 'https://' + lanHost + ':' + port + '/';
+  }
+
+  function attachRemoteStream(stream) {
+    if (!stream) return;
+    stopAnalysis();
+    remoteStream = stream;
+    $('pcRemoteVideo').srcObject = stream;
+    var playResult = $('pcRemoteVideo').play();
+    if (playResult && playResult.catch) playResult.catch(function () {});
+    setBadge('已连接', 'live');
+    setStatus('手机画面已连接，每 0.5 秒自动抽帧');
+    analysisTimer = global.setInterval(analyzeFrame, 500);
+  }
+
+  function startLanPairing(id, secret) {
+    var settings = global.BP_LAN_SIGNAL || {};
+    setBadge('局域网连接', '');
+    setStatus('正在启动本机局域网信令…');
+    try {
+      lanHost = BP.lanSignal.createHostConnection({
+        room: id,
+        token: secret,
+        path: settings.websocketPath || '/lan-signal',
+        onOpen: function () {
+          showQr(mobileStreamUrl(id, secret, lanMobileBaseUrl(settings)), true);
+          setBadge('等待扫码', '');
+          setStatus('局域网二维码已生成，等待手机扫码连接');
+          $('videoPairButton').disabled = false;
+          $('videoPairButton').textContent = '重新生成二维码';
+        },
+        onPeerJoined: function () {
+          setStatus('手机已进入，正在建立点对点视频连接…');
+        },
+        onStream: attachRemoteStream,
+        onState: function (state) {
+          if (state === 'connecting' && !remoteStream) setStatus('正在建立局域网视频连接…');
+          if (state === 'disconnected') setStatus('局域网视频暂时中断，正在等待恢复…', 'error');
+        },
+        onError: function (error) {
+          setBadge('连接失败', 'error');
+          setStatus(error.message || '局域网信令连接失败', 'error');
+        },
+        onClosed: function (reason) {
+          if (!closingConnection) closeConnection(reason || '局域网连接已断开', true);
+        }
+      });
+    } catch (error) {
+      $('videoPairButton').disabled = false;
+      setBadge('连接失败', 'error');
+      setStatus(error.message || '无法启动局域网信令', 'error');
+    }
+  }
+
   async function startPairing() {
     if (closingConnection) return;
     ensureAudio();
     $('videoPairButton').disabled = true;
     await closeConnection('', false);
-    if (!global.Peer) {
-      $('videoPairButton').disabled = false;
-      setBadge('组件缺失', 'error');
-      setStatus('PeerJS 组件未加载，请刷新页面', 'error');
-      return;
-    }
     var config = currentConfig();
     ensureSession(config.method);
     clearCandidates();
@@ -645,7 +757,20 @@
     currentSecret = secret;
     $('videoStopButton').disabled = false;
     setBadge('连接中', '');
-    setStatus('正在连接信令服务器…');
+    setStatus(BP.lanSignal && BP.lanSignal.isLanEnabled(global)
+      ? '正在连接局域网信令…'
+      : '正在连接信令服务器…');
+
+    if (BP.lanSignal && BP.lanSignal.isLanEnabled(global)) {
+      startLanPairing(id, secret);
+      return;
+    }
+    if (!global.Peer) {
+      $('videoPairButton').disabled = false;
+      setBadge('组件缺失', 'error');
+      setStatus('PeerJS 组件未加载，请刷新页面', 'error');
+      return;
+    }
 
     try {
       peer = new global.Peer(id, {
@@ -665,11 +790,7 @@
     }
     peer.on('open', function () {
       if (!peer || peer.destroyed) return;
-      var url = new URL('mobile.html', global.location.href);
-      url.searchParams.set('stream', '1');
-      url.searchParams.set('room', id);
-      url.searchParams.set('token', secret);
-      showQr(url.href);
+      showQr(mobileStreamUrl(id, secret), false);
       setBadge('等待扫码', '');
       setStatus('二维码已生成，等待手机扫码连接');
       $('videoPairButton').disabled = false;
@@ -691,14 +812,7 @@
       call.answer();
       call.on('stream', function (stream) {
         if (call !== incoming) return;
-        remoteStream = stream;
-        $('pcRemoteVideo').srcObject = stream;
-        var playResult = $('pcRemoteVideo').play();
-        if (playResult && playResult.catch) playResult.catch(function () {});
-        setBadge('已连接', 'live');
-        setStatus('手机画面已连接，每 0.5 秒自动抽帧');
-        stopAnalysis();
-        analysisTimer = global.setInterval(analyzeFrame, 500);
+        attachRemoteStream(stream);
       });
       call.on('close', function () {
         if (call === incoming) closeConnection('手机端已断开', true);
@@ -744,11 +858,17 @@
       session = BP.sessions.getSession(session.id);
     }
     var stats = BP.videoSampler.summary(chosen);
+    var stabilityOk = !isFinite(stats.cv) || stats.cv <= BP.videoSampler.DEFAULTS.maxCv;
     var selection = {
       target: config.target,
+      adaptive: config.target < 10,
+      qualityGate: 'standard',
+      stabilityOk: stabilityOk,
+      referenceOnly: !stabilityOk && config.role === 'reference',
       cv: stats.cv,
       meanPx: stats.meanPx,
       sdPx: stats.sdPx,
+      meanStripeCount: stats.meanStripeCount,
       method: config.method,
       role: config.role
     };
@@ -765,6 +885,7 @@
           size: item.blob.size,
           deltaXPx: item.deltaXPx,
           deltaXmm: isFinite(k) && k > 0 ? item.deltaXPx * k : null,
+          stripeCount: item.stripeCount,
           quality: item.visibility,
           source: item.source || 'live',
           sourceName: item.sourceName || '手机直播',
@@ -784,7 +905,8 @@
       }
       setBadge(remoteStream ? '已连接' : '未连接', remoteStream ? 'live' : '');
       setStatus('已将 ' + stored + ' 个最佳帧写入“' +
-        (BP.sessions.ROLE_LABEL[config.role] || config.role) + '”', 'ready');
+        (BP.sessions.ROLE_LABEL[config.role] || config.role) + '”；' +
+        '目标 ' + config.target + ' 帧，单帧质量门限未降低', 'ready');
     }).catch(function (error) {
       setStatus('写入失败：' + (error.message || error), 'error');
       renderCandidates();
@@ -793,13 +915,17 @@
 
   function wire() {
     populateRoles();
+    explicitTarget = Number($('videoTargetSelect').value) || BP.videoSampler.DEFAULTS.target;
     $('videoMethodSelect').addEventListener('change', function () {
       closeConnection('', false);
       populateRoles();
       clearCandidates();
     });
     $('videoRoleSelect').addEventListener('change', clearCandidates);
-    $('videoTargetSelect').addEventListener('change', clearCandidates);
+    $('videoTargetSelect').addEventListener('change', function (event) {
+      explicitTarget = Number(event.target.value) || BP.videoSampler.DEFAULTS.target;
+      clearCandidates();
+    });
     $('videoPairButton').addEventListener('click', startPairing);
     $('videoStopButton').addEventListener('click', function () {
       closeConnection('连接已停止', true);
