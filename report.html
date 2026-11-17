@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="菲涅耳双棱镜三种测量路径的实验数据、来源审计与误差分析报告">
+<title>菲涅耳双棱镜 · AI 实验数据报告</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b1726'/%3E%3Cpath d='M5 23 L16 7 L27 23 Z' fill='none' stroke='%23d9aa56' stroke-width='2'/%3E%3Cpath d='M9 18 H23' stroke='%235fe0bd' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/report.css?v=bda63a6">
+</head>
+<body>
+<a class="skip-link" href="#reportMain">跳到报告正文</a>
+
+<header class="report-topbar">
+  <a class="report-brand" href="index.html" aria-label="返回实验平台首页">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span>
+      <strong>FRESNEL LAB</strong>
+      <small>AI 实验数据报告</small>
+    </span>
+  </a>
+  <nav class="top-actions" aria-label="报告操作">
+    <a href="index.html">PC 平台</a>
+    <a href="mobile.html">手机端</a>
+    <button id="importButton" type="button">导入数据</button>
+    <button id="exportButton" type="button">导出快照</button>
+    <button id="printButton" type="button">打印 / PDF</button>
+    <input id="importInput" type="file" accept=".json,application/json" hidden>
+  </nav>
+</header>
+
+<div class="report-shell">
+  <aside class="report-sidebar" aria-label="报告目录">
+    <div class="side-kicker">REPORT / 01</div>
+    <h2>三种路径联合测量</h2>
+    <p class="side-subtitle">比值法 · 光线追迹法 · 横向放大率法</p>
+    <nav id="reportToc" class="report-toc" aria-label="章节导航">
+      <a href="#summary" class="active">结论摘要</a>
+      <a href="#geometry">实测几何量</a>
+      <a href="#methods">三方法对照</a>
+      <a href="#errors">三层误差</a>
+      <a href="#trace">光线追迹</a>
+      <a href="#audit">数据审计</a>
+      <a href="#gallery">图片精选</a>
+      <a href="#appendix">报告说明</a>
+    </nav>
+    <div class="side-status">
+      <span id="datasetBadge" class="status-dot">本地报告</span>
+      <small id="generatedAt">—</small>
+    </div>
+  </aside>
+
+  <main id="reportMain" class="report-main">
+    <section id="summary" class="report-section hero-section" aria-labelledby="summaryTitle">
+      <div class="section-eyebrow">EXECUTIVE SUMMARY</div>
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <span class="hero-index">01</span>
+          <h1 id="summaryTitle">从条纹识别到<br><em>可审计结论</em></h1>
+          <p id="summaryLead" class="lead">正在计算报告数据…</p>
+          <div id="summaryWarnings" class="warning-stack" aria-live="polite"></div>
+        </div>
+        <div class="hero-result" aria-live="polite">
+          <span class="result-label">比值法条件结果</span>
+          <strong id="heroValue">—</strong>
+          <span id="heroUncertainty" class="result-unc">—</span>
+          <div class="result-rule"></div>
+          <dl class="result-meta">
+            <div><dt>相对 589.3 nm</dt><dd id="heroBias">—</dd></div>
+            <div><dt>数据完成度</dt><dd id="heroCompleteness">—</dd></div>
+            <div><dt>结论状态</dt><dd id="heroStatus">—</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="metric-grid" id="metricGrid"></div>
+    </section>
+
+    <section id="geometry" class="report-section" aria-labelledby="geometryTitle">
+      <div class="section-heading">
+        <div>
+          <div class="section-eyebrow">MEASURED GEOMETRY</div>
+          <h2 id="geometryTitle">从 d₁、d₂ 到 A_eff</h2>
+        </div>
+        <p>放大像与缩小像的位置差给出 d、β；a+z₂ 给出 D；统一反算等效棱镜角 A。</p>
+      </div>
+      <p id="geometryLead" class="geometry-lead">正在载入二次成像记录…</p>
+      <div id="geometryGrid" class="geometry-grid"></div>
+      <div id="geometryFormulas" class="geometry-formulas"></div>
+      <p id="geometryCaveat" class="geometry-caveat"></p>
+    </section>
+
+    <section id="methods" class="report-section" aria-labelledby="methodsTitle">
+      <div class="section-heading">
+        <div>
+          <div class="section-eyebrow">METHOD COMPARISON</div>
+          <h2 id="methodsTitle">三种方法，各司其职</h2>
+        </div>
+        <p>基本公式只作共同公式基础和误差基线；正式比较只保留三条独立解算路径。</p>
+      </div>
+      <div id="methodCards" class="method-grid"></div>
+      <div class="historical-note">
+        <div class="historical-title">
+          <span>历史模型 / 仿真基准</span>
+          <strong>不是本轮视频实测</strong>
+        </div>
+        <div id="historicalTable" class="historical-table"></div>
+      </div>
+    </section>
+
+    <section id="errors" class="report-section" aria-labelledby="errorsTitle">
+      <div class="section-heading">
+        <div>
+          <div class="section-eyebrow">ERROR ARCHITECTURE</div>
+          <h2 id="errorsTitle">三层误差，不合成一个“漂亮精度”</h2>
+        </div>
+        <p>实测离散性、条件输入误差和准确度分开表达。点按误差条可展开来源与传播公式。</p>
+      </div>
+      <div class="error-layout">
+        <div class="error-budget-panel">
+          <div class="panel-heading">
+            <h3>比值法条件误差预算</h3>
+            <span id="ratioErrorTotal">—</span>
+          </div>
+          <div id="errorBars" class="error-bars"></div>
+          <div id="errorFormula" class="formula-box">—</div>
+        </div>
+        <div class="error-layer-panel">
+          <article>
+            <span class="layer-no">A</span>
+            <div>
+              <h3>实测离散性</h3>
+              <p id="dispersionText">—</p>
+            </div>
+          </article>
+          <article>
+            <span class="layer-no">B</span>
+            <div>
+              <h3>条件输入误差</h3>
+              <p>参考波长、折射率等报告预设只进入条件预算；参数来源在审计表中逐项可查。</p>
+            </div>
+          </article>
+          <article>
+            <span class="layer-no">C</span>
+            <div>
+              <h3>准确度与一致性</h3>
+              <p id="consistencyText">—</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="trace" class="report-section" aria-labelledby="traceTitle">
+      <div class="section-heading">
+        <div>
+          <div class="section-eyebrow">RAY TRACE MODEL</div>
+          <h2 id="traceTitle">从傍轴近似到严格追迹</h2>
+        </div>
+        <p>暖金色为模型追迹趋势，蓝色虚线为傍轴近似。改变 a、A、n 后必须重新追迹。</p>
+      </div>
+      <div class="trace-toolbar" role="group" aria-label="追迹图显示选项">
+        <button id="traceMainView" class="tool-button active" type="button">d–a 曲线</button>
+        <button id="traceResidualView" class="tool-button" type="button">相对残差</button>
+        <button id="traceParaxialToggle" class="tool-button active" type="button" aria-pressed="true">显示傍轴</button>
+        <span id="traceReadout" class="trace-readout" aria-live="polite">悬停曲线读取数据</span>
+      </div>
+      <div class="trace-chart-wrap">
+        <canvas id="traceChart" aria-label="虚光源间距随狭缝距离变化的交互曲线"></canvas>
+        <div id="traceLegend" class="chart-legend"></div>
+      </div>
+      <div id="traceNotes" class="trace-notes"></div>
+    </section>
+
+    <section id="audit" class="report-section" aria-labelledby="auditTitle">
+      <div class="section-heading">
+        <div>
+          <div class="section-eyebrow">PROVENANCE AUDIT</div>
+          <h2 id="auditTitle">每个数字，都能追溯</h2>
+        </div>
+        <p>按来源筛选关键字段；缺失值保持为空，不用 0 或报告预设自动补齐。</p>
+      </div>
+      <div class="audit-controls" role="group" aria-label="来源筛选">
+        <button class="audit-filter active" data-filter="all" type="button">全部</button>
+        <button class="audit-filter" data-filter="measured" type="button">实测</button>
+        <button class="audit-filter" data-filter="reportPreset" type="button">报告预设</button>
+        <button class="audit-filter" data-filter="modelTrace" type="button">模型追迹</button>
+        <button class="audit-filter" data-filter="referenceOnly" type="button">仅参考</button>
+        <button class="audit-filter" data-filter="missing" type="button">缺失</button>
+      </div>
+      <div class="table-scroll">
+        <table class="report-table">
+          <thead>
+            <tr><th>字段</th><th>数值</th><th>来源类型</th><th>来源说明</th></tr>
+          </thead>
+          <tbody id="auditBody"></tbody>
+        </table>
+      </div>
+      <div id="warningList" class="warning-list"></div>
+    </section>
+
+    <section id="gallery" class="report-section" aria-labelledby="galleryTitle">
+      <div class="section-heading">
+        <div>
+          <div class="section-eyebrow">CURATED EVIDENCE</div>
+          <h2 id="galleryTitle">精选实验图像</h2>
+        </div>
+        <p>仅复制原图并生成优化副本；原文件不移动、不覆盖、不删除。</p>
+      </div>
+      <div id="galleryGrid" class="gallery-grid"></div>
+    </section>
+
+    <section id="appendix" class="report-section" aria-labelledby="appendixTitle">
+      <div class="section-heading">
+        <div>
+          <div class="section-eyebrow">REPORT NOTES</div>
+          <h2 id="appendixTitle">口径与适用边界</h2>
+        </div>
+      </div>
+      <div class="appendix-grid">
+        <article>
+          <h3>为什么比值法仍需保留警告</h3>
+          <p>比值法能消去 d、D、k，但要求两段条纹处于同一像素缩放和采样口径。红光短片只有 5 个有效帧，帧间波动约 1.57%，因此这里只作参考性条件计算。</p>
+        </article>
+        <article>
+          <h3>d₁、d₂ 究竟怎样进入计算</h3>
+          <p>放大像和缩小像的两个位置分别作水平差，得到 d₁、d₂；再算 d=√(d₁d₂)、β=√(d₁/d₂)。D 不由报告 1000 mm 代替，而用本轮导轨读数 a+z₂。</p>
+        </article>
+        <article>
+          <h3>A 为什么只能称等效角</h3>
+          <p>本轮没有分光计直接测棱镜角，A_eff 是由 d=2a(n−1)tanA 反算。把该 A 再用于追迹，会回到同一组 d，故追迹法与放大率法不是两条独立证据。</p>
+        </article>
+        <article>
+          <h3>像素当量 k 的可信边界</h3>
+          <p>自动刻线能稳定识别相邻约 107.6 px，但 L=5 mm 仍只是报告预设。k=0.0040 mm/px 的条件波长会随 L 改变，不能用它宣称优于 1% 的绝对准确度。</p>
+        </article>
+        <article>
+          <h3>为什么不用一个总精度概括</h3>
+          <p>帧间散布、参数不确定度、与标准值的偏差含义不同。报告保留三层结构，避免把统计离散度包装成准确度。</p>
+        </article>
+        <article>
+          <h3>本地与发布</h3>
+          <p>数据导入、计算和导出均在浏览器本地完成，不上传服务器。GitHub Pages 发布需另行确认，当前报告不自动触发部署。</p>
+        </article>
+      </div>
+      <footer class="report-footer">
+        <span>Fresnel Biprism Measurement Report</span>
+        <span id="footerDate">—</span>
+      </footer>
+    </section>
+  </main>
+</div>
+
+<dialog id="importDialog" class="import-dialog" aria-labelledby="importDialogTitle">
+  <div class="dialog-head">
+    <div>
+      <span class="section-eyebrow">IMPORT PREVIEW</span>
+      <h2 id="importDialogTitle">确认导入报告数据</h2>
+    </div>
+    <button id="dialogClose" class="icon-button" type="button" aria-label="关闭导入预览">×</button>
+  </div>
+  <div id="importPreview" class="import-preview"></div>
+  <div class="dialog-actions">
+    <button id="dialogCancel" class="button-secondary" type="button">取消，保留当前数据</button>
+    <button id="dialogConfirm" class="button-primary" type="button" disabled>确认更新报告</button>
+  </div>
+</dialog>
+
+<div id="reportToast" class="report-toast" role="status" aria-live="polite"></div>
+
+<script src="js/physics.js?v=bda63a6"></script>
+<script src="js/core/report-errors.js?v=bda63a6"></script>
+<script src="js/core/report-data.js?v=bda63a6"></script>
+<script src="js/pages/report.js?v=bda63a6"></script>
+</body>
+</html>

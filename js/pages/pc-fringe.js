@@ -96,7 +96,15 @@
       loadProfilePlot(r.profile, r);
       if (BP.sessions) {
         var session = BP.sessions.getActiveSession();
-        if (!session) session = BP.sessions.createSession({ method: 'basic', title: 'PC 图像分析' });
+        if (!session) {
+          var preset = BP.sessions.reportParams('basic');
+          session = BP.sessions.createSession({
+            method: 'basic',
+            title: 'PC 图像分析',
+            params: preset.params,
+            paramsSources: preset.sources
+          });
+        }
         if (isFinite(k) && k > 0) {
           BP.sessions.updateSession(session.id, {
             calibration: {

@@ -1,16 +1,26 @@
 """检查光学页新增控件、绘制与拖动行为。"""
 
+import os
+import sys
+
 from playwright.sync_api import sync_playwright
 
 
-BASE = "http://127.0.0.1:8099"
+# 默认保留旧测试地址；联调当前平台时可用命令行参数或 BASE 环境变量覆盖
+BASE = sys.argv[1] if len(sys.argv) > 1 else os.environ.get(
+    "BASE", "http://127.0.0.1:8099"
+)
 
 
 def main():
     errors = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        # 本地平台使用自签名证书，仅测试浏览器忽略证书告警
+        page = browser.new_page(
+            viewport={"width": 1440, "height": 1000},
+            ignore_https_errors=True,
+        )
         page.on("pageerror", lambda exc: errors.append(str(exc)))
         page.on(
             "console",
@@ -110,7 +120,10 @@ def main():
         )
         assert abs(free["y"] - locked["y"]) > 20
 
-        reduced_page = browser.new_page(viewport={"width": 1024, "height": 820})
+        reduced_page = browser.new_page(
+            viewport={"width": 1024, "height": 820},
+            ignore_https_errors=True,
+        )
         reduced_page.emulate_media(reduced_motion="reduce")
         reduced_page.goto(BASE + "/optical.html", wait_until="networkidle")
         reduced_page.wait_for_timeout(400)
@@ -136,7 +149,10 @@ def main():
         reduced_page.close()
 
         # 手机端保持纯教学画布，页面不得横向溢出。
-        mobile = browser.new_page(viewport={"width": 390, "height": 844})
+        mobile = browser.new_page(
+            viewport={"width": 390, "height": 844},
+            ignore_https_errors=True,
+        )
         mobile.on("pageerror", lambda exc: errors.append("mobile: " + str(exc)))
         mobile.on(
             "console",

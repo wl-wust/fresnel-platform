@@ -28,7 +28,7 @@ function check(name, cond, detail) {
   else { bad++; console.log('FAIL  ' + name + (detail ? '  ← ' + detail : '')); }
 }
 
-const PAGES = ['index.html', 'mobile.html', 'optical.html', '404.html'];
+const PAGES = ['index.html', 'mobile.html', 'optical.html', 'report.html', '404.html'];
 const GONE = ['optical_v2.html', 'js/optical2d.js', 'js/simulation_data.js', 'js/main.js', 'lib/chart.umd.min.js', 'js/main_pure.js', 'js/mobile_merged.js'];
 
 for (const page of PAGES) {
@@ -141,6 +141,25 @@ if (fs.existsSync(optP)) {
   check('光学页有放大率/说明行 #result_M', /\sid="result_M"/.test(o));
   check('屏面标签为中性口径（条纹间距/像间距、在焦时两条细线）', /屏面：条纹间距 \/ 像间距/.test(o) && /屏面视场（±3 mm）/.test(o));
 }
+// 报告页接线：三方法、来源审计、交互追迹、导入预览与图片墙
+const reportPath = path.join(REPO, 'report.html');
+if (fs.existsSync(reportPath)) {
+  const report = fs.readFileSync(reportPath, 'utf8');
+  check('报告页加载数据与误差内核',
+        /core\/report-errors\.js/.test(report) && /core\/report-data\.js/.test(report));
+  check('报告页具备导入预览与确认按钮',
+        /\sid="importInput"/.test(report) && /\sid="importPreview"/.test(report) &&
+        /\sid="dialogConfirm"/.test(report));
+  check('报告页包含三方法、追迹图、来源审计和图片墙',
+        /\sid="methodCards"/.test(report) && /\sid="traceChart"/.test(report) &&
+        /\sid="auditBody"/.test(report) && /\sid="galleryGrid"/.test(report));
+} else {
+  check('存在 report.html', false);
+}
+const serverPath = path.join(REPO, 'tools', 'lan-video-server.js');
+const serverSource = fs.existsSync(serverPath) ? fs.readFileSync(serverPath, 'utf8') : '';
+check('局域网静态服务允许 report.html',
+      /ALLOWED_ENTRIES[\s\S]*?'report\.html'/.test(serverSource));
 console.log('\n仓库根: ' + REPO);
 console.log((bad === 0 ? '页面接线检查通过' : bad + ' 项不通过') + '（' + ok + ' pass / ' + bad + ' fail）');
 process.exit(bad === 0 ? 0 : 1);

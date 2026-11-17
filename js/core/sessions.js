@@ -47,6 +47,28 @@
     },
     traceVersion: 'report-table-5.1'
   };
+  /*
+   * 报告表 5.1 的参数只作为显式“报告预设”进入会话，
+   * 不冒充本次视频或照片识别结果。
+   */
+  var REPORT_PARAM_PRESET = {
+    basic: {
+      params: { d: 0.90213, D: 1000 },
+      sources: { d: '报告预设', D: '报告预设' }
+    },
+    ratio: {
+      params: { lamRef: 650, nNa: 1.5168, nRef: 1.5145 },
+      sources: { lamRef: '报告预设', nNa: '报告预设', nRef: '报告预设' }
+    },
+    magnification: {
+      params: { dPrime: 3.969, beta: 4.4, D: 1000 },
+      sources: { dPrime: '报告预设', beta: '报告预设', D: '报告预设' }
+    },
+    trace: {
+      params: { D: 1000 },
+      sources: { D: '报告预设' }
+    }
+  };
 
   function LS() {
     try { return global.localStorage || null; } catch (e) { return null; }
@@ -176,6 +198,14 @@
     saveSessions(list);
     setActiveSession(session.id);
     return session;
+  }
+
+  function reportParams(method) {
+    var preset = REPORT_PARAM_PRESET[method] || REPORT_PARAM_PRESET.basic;
+    return {
+      params: clone(preset.params),
+      sources: clone(preset.sources)
+    };
   }
 
   function updateSession(id, patch) {
@@ -330,6 +360,7 @@
     ROLE_LABEL: ROLE_LABEL,
     METHOD_ROLES: METHOD_ROLES,
     TRACE_PRESET: TRACE_PRESET,
+    reportParams: reportParams,
     listSessions: listSessions,
     getSession: getSession,
     getActiveSession: getActiveSession,

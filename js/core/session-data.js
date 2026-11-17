@@ -12,7 +12,8 @@
     session: '当前会话继承',
     report: '报告预设',
     manual: '手动输入',
-    trace: '追迹预设'
+    trace: '追迹预设',
+    unknown: '来源未标注'
   };
   var METHOD_LABEL = {
     basic: '基本公式',
@@ -77,7 +78,8 @@
   function paramSource(session, key, fallback) {
     var sources = session && session.paramsSources;
     var value = sources ? sources[key] : null;
-    return value || fallback;
+    // 旧记录若没有逐项来源，不能把数值推定成实测或会话继承。
+    return value || fallback || SOURCE.unknown;
   }
   function calibration(session, options) {
     var c = session && session.calibration;
@@ -174,9 +176,9 @@
     var kValue = put(result, 'k', k, '像素当量 k', SOURCE.calibration);
     if (kValue !== null) result.sourceDetails.k = calibrationDetail(session);
     var d = put(result, 'd', param(session, 'd'), '虚光源间距 d',
-      paramSource(session, 'd', SOURCE.session));
+      paramSource(session, 'd'));
     var D = put(result, 'D', param(session, 'D'), '观察距离 D',
-      paramSource(session, 'D', SOURCE.session));
+      paramSource(session, 'D'));
     result.stats.sodium = sodium;
 
     if (sodium.meanPx !== null && k !== null && d !== null && D !== null && global.BP.physics) {
@@ -201,11 +203,11 @@
     if (sodium.meanPx !== null) result.values.dxNaPx = sodium.meanPx;
     if (reference.meanPx !== null) result.values.dxRefPx = reference.meanPx;
     var lamRef = put(result, 'lamRef', param(session, 'lamRef'), '参考光波长',
-      paramSource(session, 'lamRef', SOURCE.session));
+      paramSource(session, 'lamRef'));
     var nNa = put(result, 'nNa', param(session, 'nNa'), '钠光折射率',
-      paramSource(session, 'nNa', SOURCE.session));
+      paramSource(session, 'nNa'));
     var nRef = put(result, 'nRef', param(session, 'nRef'), '参考光折射率',
-      paramSource(session, 'nRef', SOURCE.session));
+      paramSource(session, 'nRef'));
     result.stats.sodium = sodium;
     result.stats.reference = reference;
 
@@ -236,11 +238,11 @@
     if (noLens.meanMm !== null) result.values.dxNaMm = noLens.meanMm;
     if (withLens.meanMm !== null) result.values.dxPrimeMm = withLens.meanMm;
     var dPrime = put(result, 'dPrime', param(session, 'dPrime'), '像间距 d′',
-      paramSource(session, 'dPrime', SOURCE.session));
+      paramSource(session, 'dPrime'));
     var beta = put(result, 'beta', param(session, 'beta'), '放大率 β',
-      paramSource(session, 'beta', SOURCE.session));
+      paramSource(session, 'beta'));
     var D = put(result, 'D', param(session, 'D'), '观察距离 D',
-      paramSource(session, 'D', SOURCE.session));
+      paramSource(session, 'D'));
     result.stats.noLens = noLens;
     result.stats.withLens = withLens;
 
@@ -276,7 +278,7 @@
     var DValue = param(session, 'D');
     var D = put(result, 'D',
       DValue !== null ? DValue : (preset ? preset.D_mm : null),
-      '观察距离 D', DValue !== null ? paramSource(session, 'D', SOURCE.session) : SOURCE.trace);
+      '观察距离 D', DValue !== null ? paramSource(session, 'D') : SOURCE.trace);
     result.stats.sodium = sodium;
 
     if (sodium.meanPx !== null && k !== null && d !== null && D !== null && global.BP.physics) {

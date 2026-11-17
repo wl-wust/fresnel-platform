@@ -38,7 +38,8 @@ async function createWithFrames(method, frames, extra) {
         source: '自动刻线标定',
         L_source: '报告预设，待核实'
       },
-      params: { d: 0.90213, D: 1000 }
+      params: { d: 0.90213, D: 1000 },
+      paramsSources: { d: '报告预设', D: '报告预设' }
     });
     const out = D.build(session);
     assert.strictEqual(out.method, 'basic');
@@ -50,7 +51,7 @@ async function createWithFrames(method, frames, extra) {
     assert.strictEqual(out.sources.dxNaPx, '自动识别');
     assert.strictEqual(out.sources.k, '来自标定');
     assert.strictEqual(out.sourceDetails.k, 'L 来源：报告预设，待核实');
-    assert.strictEqual(out.sources.d, '当前会话继承');
+    assert.strictEqual(out.sources.d, '报告预设');
     assert.strictEqual(out.complete, true);
   });
 

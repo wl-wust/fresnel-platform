@@ -24,7 +24,8 @@ let ver = arg('sha', '').trim();
 if (!ver) ver = Date.now().toString(36).slice(-7);
 if (!/^[0-9a-z]{4,16}$/i.test(ver)) { console.log('FAIL  版本号不合法：' + ver); process.exit(1); }
 
-const PAGES = ['index.html', 'mobile.html', 'optical.html', '404.html'];
+// 报告页也必须随版本号刷缓存，否则 GitHub Pages 会继续返回旧脚本。
+const PAGES = ['index.html', 'mobile.html', 'optical.html', 'report.html', '404.html'];
 let changed = 0, seen = 0;
 
 for (const page of PAGES) {

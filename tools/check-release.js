@@ -27,7 +27,7 @@ function findRepo(start) {
 const REPO = findRepo(__dirname);
 if (!REPO) { console.log('FAIL  找不到仓库根（缺 plat_review/MANIFEST.sha256）'); process.exit(1); }
 
-const PAGES = ['index.html', 'mobile.html', 'optical.html', '404.html'];
+const PAGES = ['index.html', 'mobile.html', 'optical.html', 'report.html', '404.html'];
 const KEEP_UNREFERENCED = new Set([
   // 有意保留、不被页面直接引用：
   // data/params.default.json —— 报告表 5.1 的机器可读副本（文档性），也让将来接后端时有一个数据源
@@ -93,7 +93,7 @@ for (const page of Object.keys(budget)) {
   console.log('  ' + page.padEnd(14) + String(b.assets).padStart(3) + ' 个   ' +
               (b.bytes / 1024).toFixed(1).padStart(8) + ' KB');
 }
-console.log('  ' + '四页合计'.padEnd(14) + '        ' + (totalAll / 1024).toFixed(1).padStart(8) + ' KB');
+console.log('  ' + '五页合计'.padEnd(14) + '        ' + (totalAll / 1024).toFixed(1).padStart(8) + ' KB');
 
 let big = 0;
 for (const r of used) {

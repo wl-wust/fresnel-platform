@@ -1,0 +1,179 @@
+{
+  "schema": "bp.report-images/1",
+  "generatedAt": "2026-11-17T21:19:37+08:00",
+  "sourceRoot": "D:\\物理实验\\第二次自主设计",
+  "note": "精选副本由原图压缩生成；原图未移动、未覆盖、未删除。",
+  "images": [
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\装置图\\11c243e8105c266c3c8999c41f373fb2.png",
+      "reportPath": "assets/report-images/apparatus-01.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\apparatus-01.jpg",
+      "category": "apparatus",
+      "caption": "菲涅耳双棱镜实验光路与关键部件示意",
+      "note": "用于说明钠光、棱镜、观察屏与二次成像部件的位置关系。",
+      "score": 42.45,
+      "metrics": {
+        "clarity": 1050.9785,
+        "exposure": 0.0,
+        "contrast": 0.4081,
+        "fringe": 0.2844,
+        "resolution": 0.2637
+      },
+      "width": 2136,
+      "height": 1201,
+      "sha256": "45591d354a2d1c9bd63a561d914ac0415b5cd44413273f20a6d6853c22eb23b6"
+    },
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\11.17实验\\装置\\85614bfbf81b9da535ad5fe3700c079b.jpg",
+      "reportPath": "assets/report-images/apparatus-02.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\apparatus-02.jpg",
+      "category": "apparatus",
+      "caption": "观测轨道与元件位置",
+      "note": "图中标尺与多位元件同框，可用于说明 a、D 等几何量的测量口径。",
+      "score": 74.9,
+      "metrics": {
+        "clarity": 211.0632,
+        "exposure": 0.9379,
+        "contrast": 0.7774,
+        "fringe": 0.967,
+        "resolution": 0.3895
+      },
+      "width": 1440,
+      "height": 1920,
+      "sha256": "d2258b87531e2d011bed6d75a2073a445bc37eadc1ec8210320639a267a2f29e"
+    },
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\11.17实验\\装置\\2d7addea1e34d42dd27763993278bd18.jpg",
+      "reportPath": "assets/report-images/apparatus-03.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\apparatus-03.jpg",
+      "category": "apparatus",
+      "caption": "双棱镜实验装置全景",
+      "note": "展示导轨、光源与观察端的整体布置。",
+      "score": 66.96,
+      "metrics": {
+        "clarity": 90.2611,
+        "exposure": 0.9963,
+        "contrast": 0.5848,
+        "fringe": 0.9324,
+        "resolution": 0.3895
+      },
+      "width": 1920,
+      "height": 1440,
+      "sha256": "80d2e9a4e1bdf24b5fa1dee96461211e4ce0104d5cd28286b3968e0bb5098725"
+    },
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\11.17实验\\装置\\c48a2bb92a33708931d1968151848e95.jpg",
+      "reportPath": "assets/report-images/apparatus-04.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\apparatus-04.jpg",
+      "category": "apparatus",
+      "caption": "双棱镜与狭缝近景",
+      "note": "用于核对棱脊、狭缝和调节机构的相对位置。",
+      "score": 74.02,
+      "metrics": {
+        "clarity": 260.8071,
+        "exposure": 0.9606,
+        "contrast": 0.7115,
+        "fringe": 0.8997,
+        "resolution": 0.3895
+      },
+      "width": 1920,
+      "height": 1440,
+      "sha256": "5925b6483a58626d58bb7684ad54004ba23a486fb4c1b53c30a13b2aa8cdd491"
+    },
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\11.17实验\\装置\\db9af3edce0a2020222d924e384bea72.jpg",
+      "reportPath": "assets/report-images/apparatus-05.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\apparatus-05.jpg",
+      "category": "apparatus",
+      "caption": "观察端与成像部件",
+      "note": "展示观察屏方向的装置细节。",
+      "score": 68.56,
+      "metrics": {
+        "clarity": 90.2869,
+        "exposure": 0.9903,
+        "contrast": 0.6953,
+        "fringe": 0.9347,
+        "resolution": 0.3895
+      },
+      "width": 1920,
+      "height": 1440,
+      "sha256": "8da9157e7fff30091ab4b4482519b78d4884a36f5f394032a6c2dc5797006c63"
+    },
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\11.17实验\\钠光灯\\比值法\\4d416170a0ab99512eb66657d01a82e9_0.jpg",
+      "reportPath": "assets/report-images/reticle-01.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\reticle-01.jpg",
+      "category": "reticle",
+      "caption": "分划板与等距刻线",
+      "note": "用于像素当量 k 的刻线间距说明；报告不沿用未核实的 5 mm 预设。",
+      "score": 44.99,
+      "metrics": {
+        "clarity": 112.7407,
+        "exposure": 0.0257,
+        "contrast": 0.6773,
+        "fringe": 0.8741,
+        "resolution": 0.0
+      },
+      "width": 485,
+      "height": 647,
+      "sha256": "c2cd5d5951450553a6c0a06bff281182804a957521e1f7f3752733a5408dff7f"
+    },
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\11.3实验\\IMG_20261103_141001.jpg",
+      "reportPath": "assets/report-images/sodium_fringe-01.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\sodium_fringe-01.jpg",
+      "category": "sodium_fringe",
+      "caption": "钠光干涉条纹原始照片",
+      "note": "来自第一次实验的原始照片，用于展示条纹形态与识别难度。",
+      "score": 81.57,
+      "metrics": {
+        "clarity": 394.0319,
+        "exposure": 0.9998,
+        "contrast": 0.4707,
+        "fringe": 0.9659,
+        "resolution": 1.0
+      },
+      "width": 3072,
+      "height": 4096,
+      "sha256": "d5cd2bcf1ff1660271f591119c4f4f3d254947bd98586aca0f09cc9f5c58f86c"
+    },
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\11.17实验\\钠光灯\\二次成像\\7c6462e19b054225e7d5766f805c8669.jpg",
+      "reportPath": "assets/report-images/second_image-01.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\second_image-01.jpg",
+      "category": "second_image",
+      "caption": "加透镜后的二次成像画面",
+      "note": "用于说明横向放大率法所需的二次成像角色；重复画面只保留这一张。",
+      "score": 37.58,
+      "metrics": {
+        "clarity": 4.6069,
+        "exposure": 0.0,
+        "contrast": 0.6245,
+        "fringe": 0.9728,
+        "resolution": 0.3895
+      },
+      "width": 1440,
+      "height": 1920,
+      "sha256": "8c1c2e2961b73daeaec892fe92e5471bfb8887e8a8898e8d44945e1367f45cd9"
+    },
+    {
+      "sourcePath": "D:\\物理实验\\第二次自主设计\\11.17实验\\其他数据\\IMG_20261117_191849.jpg",
+      "reportPath": "assets/report-images/other_data-01.jpg",
+      "organizedPath": "D:\\物理实验\\第二次自主设计\\报告精选图片\\other_data-01.jpg",
+      "category": "other_data",
+      "caption": "第二次实验手写原始记录",
+      "note": "用于追溯实验日期、操作顺序与原始参数。",
+      "score": 71.24,
+      "metrics": {
+        "clarity": 207.871,
+        "exposure": 0.9995,
+        "contrast": 0.2435,
+        "fringe": 0.8511,
+        "resolution": 1.0
+      },
+      "width": 3072,
+      "height": 4096,
+      "sha256": "8db570f2eb6c3a4fdb90f29b3d9440bfb0937a0bc536737e530a90cc1bf09f78"
+    }
+  ]
+}

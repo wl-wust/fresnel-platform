@@ -107,6 +107,14 @@ button:disabled { opacity:0.5; cursor:not-allowed; }
 
 .btn-optical-mobile { display: block; margin: 10px 0; padding: 12px; background: rgba(123,44,191,0.2); border: 1px solid #7b2cbf; border-radius: 10px; color: #7b2cbf; text-align: center; text-decoration: none; font-size: 14px; }
 
+/* 手机端报告入口沿用整行按钮，使用暖金色与测量页区分 */
+.btn-report-mobile {
+  margin-top: -4px;
+  background: rgba(217,170,86,0.14);
+  border-color: rgba(217,170,86,0.72);
+  color: #d9aa56;
+}
+
 .session-panel {
   background: rgba(0, 212, 255, 0.07);
   border: 1px solid rgba(0, 212, 255, 0.25);

@@ -17,8 +17,15 @@ const path = require('path');
 // index  : 2 css + 20 script
 // mobile : 2 css + 13 script
 // optical: 2 css + 11 script（含 optical-rail.js 与 optical-visual.js）
+// report : 1 css + 4 script
 // 404    : 1 css
-const EXPECT = { 'index.html': 22, 'mobile.html': 15, 'optical.html': 13, '404.html': 1 };
+const EXPECT = {
+  'index.html': 22,
+  'mobile.html': 15,
+  'optical.html': 13,
+  'report.html': 5,
+  '404.html': 1
+};
 
 function findRepo(start) {
   let d = path.resolve(start);

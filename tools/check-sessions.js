@@ -69,6 +69,14 @@ function check(name, fn) {
     assert.strictEqual(S.TRACE_PRESET.source, 'matlab-strict');
     return S.TRACE_PRESET.label;
   });
+  check('报告预设逐项标注来源', () => {
+    const preset = S.reportParams('ratio');
+    assert.strictEqual(preset.params.lamRef, 650);
+    assert.strictEqual(preset.params.nNa, 1.5168);
+    assert.strictEqual(preset.sources.lamRef, '报告预设');
+    assert.strictEqual(preset.sources.nNa, '报告预设');
+    return 'ratio 参数 3 项';
+  });
   check('record/2 导出', () => {
     const rec = S.exportRecord();
     assert.strictEqual(rec.schema, 'bp.record/2');

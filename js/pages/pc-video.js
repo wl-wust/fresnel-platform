@@ -156,9 +156,12 @@
   function ensureSession(method) {
     var active = BP.sessions.getActiveSession();
     if (active && active.method === method) return active;
+    var preset = BP.sessions.reportParams(method);
     return BP.sessions.createSession({
       method: method,
-      title: '视频采集 ' + new Date().toLocaleString()
+      title: '视频采集 ' + new Date().toLocaleString(),
+      params: preset.params,
+      paramsSources: preset.sources
     });
   }
 

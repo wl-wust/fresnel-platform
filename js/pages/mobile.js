@@ -145,9 +145,12 @@
     var current = activeSession();
     if (current) return current;
     var method = $('methodSelect') ? $('methodSelect').value : 'ratio';
+    var preset = S().reportParams(method);
     return S().createSession({
       method: method,
-      title: '现场采集'
+      title: '现场采集',
+      params: preset.params,
+      paramsSources: preset.sources
     });
   }
 
@@ -427,8 +430,11 @@
       var method = $('methodSelect') ? $('methodSelect').value : 'ratio';
       S().createSession({
         method: method,
-        title: '现场采集'
+        title: '现场采集',
+        params: S().reportParams(method).params,
+        paramsSources: S().reportParams(method).sources
       });
+      syncParamsToSession();
       renderAllSessionUI();
       applySessionData({ silent: true });
       BP.ui.alert('已新建' + methodLabel(method) + '会话', 'ok');
@@ -1400,7 +1406,13 @@
       retL.addEventListener('input', function () { retL.dataset.userEdited = '1'; });
     }
     if (BP.sessions && !BP.sessions.listSessions().length) {
-      BP.sessions.createSession({ method: 'ratio', title: '现场采集' });
+      var preset = BP.sessions.reportParams('ratio');
+      BP.sessions.createSession({
+        method: 'ratio',
+        title: '现场采集',
+        params: preset.params,
+        paramsSources: preset.sources
+      });
     }
     renderAllSessionUI();
     var sessionSelect = $('sessionSelect');

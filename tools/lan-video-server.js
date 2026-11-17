@@ -17,6 +17,7 @@ const ALLOWED_ENTRIES = new Set([
   'index.html',
   'mobile.html',
   'optical.html',
+  'report.html',
   '404.html',
   'lan-config.js',
   'favicon.ico',

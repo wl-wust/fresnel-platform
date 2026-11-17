@@ -8,7 +8,9 @@ from playwright.sync_api import sync_playwright
 
 
 # 默认仍可配合临时静态服务器使用，也允许直接检查当前 HTTPS 局域网平台。
-BASE = os.environ.get("BASE", "http://127.0.0.1:8099")
+BASE = sys.argv[1] if len(sys.argv) > 1 else os.environ.get(
+    "BASE", "http://127.0.0.1:8099"
+)
 sys.stdout.reconfigure(encoding="utf-8")
 
 
@@ -39,21 +41,25 @@ def main():
               {
                 method: 'basic',
                 params: { d: 0.90213, D: 1000 },
+                paramsSources: { d: '报告预设', D: '报告预设' },
                 roles: { sodium: [163.2, 163.4] }
               },
               {
                 method: 'ratio',
                 params: { lamRef: 650, nNa: 1.5168, nRef: 1.5145 },
+                paramsSources: { lamRef: '报告预设', nNa: '报告预设', nRef: '报告预设' },
                 roles: { sodium: [163.3, 163.4], reference: [180.8, 181.0] }
               },
               {
                 method: 'magnification',
                 params: { dPrime: 3.969, beta: 4.4, D: 1000 },
+                paramsSources: { dPrime: '报告预设', beta: '报告预设', D: '报告预设' },
                 roles: { no_lens: [0.65332, 0.6535], with_lens: [2.8746, 2.8750] }
               },
               {
                 method: 'trace',
                 params: { D: 1000 },
+                paramsSources: { D: '报告预设' },
                 roles: { sodium: [163.2, 163.4] }
               }
             ];
@@ -63,7 +69,8 @@ def main():
                 method: item.method,
                 title: 'auto-fill-' + item.method,
                 calibration: { k_mm_px: 0.004, source: 'L/N' },
-                params: item.params
+                params: item.params,
+                paramsSources: item.paramsSources
               });
               for (const [role, values] of Object.entries(item.roles)) {
                 for (const value of values) {
@@ -387,6 +394,10 @@ def main():
         raise SystemExit(5)
     if not result["mobile"]["auto_fill"]["complete"]:
         raise SystemExit(6)
+    if any("来源未标注" in item["summary"] for item in result["pc"]["auto_fill"]):
+        raise SystemExit(27)
+    if any("报告预设" not in item["summary"] for item in result["pc"]["auto_fill"]):
+        raise SystemExit(28)
     if any("平均 0.0 条条纹" in item["summary"] for item in result["pc"]["auto_fill"]):
         raise SystemExit(25)
     if "平均 0.0 条条纹" in result["mobile"]["auto_fill"]["summary"]:
