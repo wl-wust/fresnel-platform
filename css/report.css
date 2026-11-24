@@ -353,6 +353,8 @@ button {
 
 .hero-result {
   position: relative;
+  min-width: 0;
+  overflow: hidden;
   padding: 2rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
@@ -385,7 +387,9 @@ button {
   font-size: clamp(2.1rem, 4vw, 3.25rem);
   font-weight: 500;
   line-height: 1;
-  white-space: nowrap;
+  /* 桌面中等宽度下允许在“±”两侧换行，避免结果卡撑出页面。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .result-unc {
@@ -673,6 +677,12 @@ button {
   color: var(--blue);
   border-color: rgba(119, 174, 232, 0.38);
   background: var(--blue-soft);
+}
+
+.source-chip[data-source="nominal"] {
+  color: #c8b4ff;
+  border-color: rgba(179, 153, 255, 0.38);
+  background: rgba(122, 92, 214, 0.12);
 }
 
 .source-chip[data-source="modelTrace"] {

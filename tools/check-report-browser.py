@@ -105,33 +105,111 @@ def main() -> None:
         page = context.new_page()
         attach_error_capture(page, errors)
         page.goto(BASE + "/report.html", wait_until="networkidle")
-        page.evaluate("() => localStorage.removeItem('bp.report.snapshot.v2')")
+        page.evaluate(
+            """() => {
+              localStorage.removeItem('bp.report.snapshot.v2');
+              localStorage.removeItem('bp.report.snapshot.v3');
+            }"""
+        )
         page.reload(wait_until="networkidle")
         wait_report_ready(page)
+        page.wait_for_function(
+            "() => document.querySelector('#heroValue').textContent.includes('672.0')",
+            timeout=15000,
+        )
 
-        # 默认数据必须同时体现真实识别值与“红光仅参考”警告。
+        # 默认数据来自仓库内真实聚合快照，不复制或伪造个体帧。
         hero_value = page.locator("#heroValue").inner_text()
         summary_text = page.locator("#summaryLead").inner_text()
         metrics_text = page.locator("#metricGrid").inner_text()
-        check("597.10" in hero_value, "比值法条件结果复现为 597.10 nm")
-        check("104.954" in summary_text and "114.763" in summary_text,
-              "摘要显示钠光与红光真实 Δx")
-        check("20" in metrics_text and "5" in metrics_text,
-              "摘要显示钠光 20 帧与红光 5 帧")
-        geometry_text = page.locator("#geometryGrid").inner_text()
-        check("0.91805" in geometry_text and "628.37" in geometry_text,
-              "实测几何区显示 d 与二次成像距离 D")
-        check("0.53009" in geometry_text, "实测几何区显示反算等效角 A_eff")
-        check("报告预设" in geometry_text,
-              "A_eff 明确标记含报告预设折射率")
-        check(
-            "referenceOnly" in page.locator("#summaryWarnings").inner_text(),
-            "红光有限帧数警告显式出现",
+        check("672.0" in hero_value and "± 0.9" in hero_value,
+              "默认比值法复算 672.0 ± 0.9 nm")
+        check("2026-11-24 实测快照" in page.locator("#datasetBadge").inner_text(),
+              "默认页明确标注实测快照")
+        check("0.219040" in summary_text and "0.250904" in summary_text,
+              "摘要显示钠光标准与红光待测的真实毫米 Δx")
+        check("55" in metrics_text and "50" in metrics_text,
+              "摘要显示钠光 55 帧与红光 50 帧")
+        default_state = page.evaluate(
+            """() => {
+              const data = BP.pages.report.getDataset();
+              return {
+                scenarioId: data.scenarioId,
+                source: BP.pages.report.getDatasetSource(),
+                referenceOnly: data.roleStats.reference.referenceOnly,
+                referenceCount: data.roleStats.reference.nMm,
+                sodiumStripes: data.roleStats.sodium.stripeCountStatus,
+                targetStripes: data.roleStats.reference.stripeCountStatus
+              };
+            }"""
         )
+        check(default_state["scenarioId"] == "fresnel-sodium-red-2026-11-24",
+              "默认快照 scenarioId 校验通过")
+        check(default_state["source"] == "defaultSnapshot",
+              "默认数据取自仓库实测快照")
+        check(default_state["referenceOnly"] is False and
+              default_state["referenceCount"] == 50,
+              "红光按待测目标写入 50 个正式帧")
+        check(default_state["sodiumStripes"] == "pending" and
+              default_state["targetStripes"] == "pending",
+              "双角色条纹数保持待补，不用旧值冒充")
+        geometry_text = page.locator("#geometryGrid").inner_text()
+        check("没有二次成像观测记录" in geometry_text,
+              "默认快照不借用另一轮二次成像几何量")
+        check("条纹数待补" in page.locator("#stepsData").inner_text(),
+              "结果区明确显示条纹数待补")
         desktop_overflow = page.evaluate(
             "() => document.documentElement.scrollWidth > window.innerWidth + 1"
         )
         check(not desktop_overflow, "桌面报告页无横向溢出")
+
+        # A–F 结果区：五步、传播公式、未定量 B 类、标称比较。
+        steps_text = page.locator("#steps").inner_text()
+        check("五步" in steps_text, "结果区标题出现五步表述")
+        check("1 测量值" in steps_text and "5 结果表达式" in steps_text,
+              "五步表含第 1 步与第 5 步")
+        check("U_r,95" in steps_text, "展示相对扩展不确定度")
+        check("仅 A 类重复性项" in steps_text, "明确标注仅 A 类重复性项")
+        check("P=95%" in steps_text, "标注置信水平 P=95%")
+        formula_text = page.locator("#stepsFormula").inner_text()
+        check("u(Δx_R)/Δx_R" in formula_text and "u(n_Na)/(n_Na−1)" in formula_text,
+              "误差传播公式五项齐全")
+        terms_text = page.locator("#stepsTerms").inner_text()
+        check(terms_text.count("未定量") == 3, "三项 B 类灰显为未定量")
+        compare_text = page.locator("#stepsCompare").inner_text()
+        check("650" in compare_text and "未独立校准" in compare_text,
+              "与标称 650 nm 比较且注明未校准")
+        audit_text = page.locator("#stepsAudit").inner_text()
+        check("不是完整实验总不确定度" in audit_text,
+              "审计区声明 0.12% 不是完整总不确定度")
+        errors_text = page.locator("#errors").inner_text()
+        check("χ²" not in errors_text, "误差区不再出现历史 χ²")
+        check("三路径" not in errors_text and "加权合成" not in errors_text,
+              "误差区不再出现三路径加权合成")
+        check("u(Δx_R)/Δx_R" in formula_text and "u(n_Na)/(n_Na−1)" in formula_text,
+              "五项传播公式仍在")
+        check(terms_text.count("未定量") == 3, "三项 B 类未定量说明仍在")
+
+        # 旧的 v2 缓存不得覆盖仓库默认实测快照。
+        page.evaluate(
+            """() => localStorage.setItem('bp.report.snapshot.v2', JSON.stringify({
+              storageVersion: 2,
+              dataset: { scenarioId: 'legacy-641', sessions: [], roleStats: {} }
+            }))"""
+        )
+        page.reload(wait_until="networkidle")
+        wait_report_ready(page)
+        check("672.0" in page.locator("#heroValue").inner_text(),
+              "旧 v2 本地快照不覆盖默认实测结果")
+
+        # 标称 650 nm 必须能以独立来源标签筛选。
+        page.click('.audit-filter[data-filter="nominal"]')
+        nominal_sources = page.locator("#auditBody .source-chip").evaluate_all(
+            "els => els.map(el => el.dataset.source)"
+        )
+        check(bool(nominal_sources) and all(source == "nominal" for source in nominal_sources),
+              "来源审计单独展示标称 650 nm")
+        page.click('.audit-filter[data-filter="all"]')
 
         # 无效 JSON 只显示字段错误，不替换当前报告。
         before_invalid = page.locator("#heroValue").inner_text()
@@ -168,14 +246,19 @@ def main() -> None:
               return {
                 sodium: data.roleStats.sodium.n,
                 reference: data.roleStats.reference.n,
+                sodiumEvidence: data.roleStats.sodium.nEvidence,
+                referenceEvidence: data.roleStats.reference.nEvidence,
                 referenceOnly: data.roleStats.reference.referenceOnly,
                 sessions: data.sessions.length
               };
             }
             """
         )
-        check(imported_roles["sodium"] == 2 and imported_roles["reference"] == 2,
-              "导入记录按 sodium/reference 角色聚合")
+        check(imported_roles["sodium"] == 2 and
+              imported_roles["sodiumEvidence"] == 2 and
+              imported_roles["reference"] == 0 and
+              imported_roles["referenceEvidence"] == 2,
+              "导入记录按角色聚合且红光仅参考不进入正式毫米统计")
         check(imported_roles["referenceOnly"] is True,
               "导入记录保留红光仅参考标记")
 
@@ -206,7 +289,7 @@ def main() -> None:
         snapshot = json.loads(export_path.read_text(encoding="utf-8"))
         check(snapshot.get("version") == "bp.report/1",
               "导出文件声明 bp.report/1")
-        exported_ratio = float(snapshot["dataset"]["methods"]["ratio"]["valueNm"])
+        exported_ratio = snapshot["dataset"]["methods"]["ratio"]["valueNm"]
         page.set_input_files("#importInput", str(export_path))
         page.wait_for_function(
             "() => document.querySelector('#importDialog')?.open === true",
@@ -220,8 +303,8 @@ def main() -> None:
         roundtrip_ratio = page.evaluate(
             "() => BP.pages.report.getDataset().methods.ratio.valueNm"
         )
-        check(abs(float(roundtrip_ratio) - exported_ratio) < 1e-9,
-              "bp.report/1 导出导入往返保持数值")
+        check(roundtrip_ratio is None and exported_ratio is None,
+              "bp.report/1 导出导入往返保持条件缺失状态")
 
         # 追迹图：悬停、残差切换与傍轴曲线显隐。
         canvas = page.locator("#traceChart")
@@ -309,20 +392,28 @@ def main() -> None:
         mobile = mobile_context.new_page()
         attach_error_capture(mobile, errors)
         mobile.goto(BASE + "/report.html", wait_until="networkidle")
-        mobile.evaluate("() => localStorage.removeItem('bp.report.snapshot.v2')")
+        mobile.evaluate(
+            """() => {
+              localStorage.removeItem('bp.report.snapshot.v2');
+              localStorage.removeItem('bp.report.snapshot.v3');
+            }"""
+        )
         mobile.reload(wait_until="networkidle")
         wait_report_ready(mobile)
+        mobile.wait_for_function(
+            "() => document.querySelector('#heroValue').textContent.includes('672.0')",
+            timeout=15000,
+        )
         mobile_overflow = mobile.evaluate(
             "() => document.documentElement.scrollWidth > window.innerWidth + 1"
         )
         check(not mobile_overflow, "手机报告页无横向溢出")
-        check("597.10" in mobile.locator("#heroValue").inner_text(),
-              "手机报告页显示同一条件结果")
-        check(mobile.locator("#methodCards .method-card").count() == 3,
-              "手机报告页保留三种方法卡片")
-        mobile_geometry = mobile.locator("#geometryGrid").inner_text()
-        check("0.91805" in mobile_geometry and "0.53009" in mobile_geometry,
-              "手机报告页显示同一组实测几何量")
+        check("672.0" in mobile.locator("#heroValue").inner_text(),
+              "手机报告页显示同一实测结果")
+        check(mobile.locator("#methodCards .method-card").count() == 1,
+              "手机报告页只保留单一主方法卡片（钠光测红光）")
+        check("没有二次成像观测记录" in mobile.locator("#geometryGrid").inner_text(),
+              "手机报告页同样不伪造几何量")
         mobile.locator("#galleryGrid").scroll_into_view_if_needed()
         mobile.wait_for_function(
             "() => document.querySelectorAll('.gallery-card img').length >= 8",
@@ -333,6 +424,18 @@ def main() -> None:
         result["mobileHero"] = mobile.locator("#heroValue").inner_text()
 
         mobile_context.close()
+
+        # 本机导入仍应覆盖默认快照；?demo=1 才恢复历史 641.51 nm 条件情景。
+        page.reload(wait_until="networkidle")
+        wait_report_ready(page)
+        imported_source = page.evaluate("() => BP.pages.report.getDatasetSource()")
+        check(imported_source == "localSnapshot",
+              "已确认导入的本机 v3 快照可跨刷新恢复")
+        page.goto(BASE + "/report.html?demo=1", wait_until="networkidle")
+        wait_report_ready(page)
+        check("641.5" in page.locator("#heroValue").inner_text(),
+              "demo=1 才启用历史 641.51 nm 条件数据")
+
         context.close()
         browser.close()
 

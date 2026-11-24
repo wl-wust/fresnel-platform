@@ -12,7 +12,9 @@
     minAcf: 0.2,
     maxCrossDiff: 0.02,
     maxSaturation: 0.02,
-    maxCv: 0.005
+    maxCv: 0.005,
+    // 稳健簇宽度以 MAD 的倍数定义，避免少数高分行把主周期整体拉偏。
+    clusterMadScale: 2
   };
   var SHORT_VIDEO_SECONDS = 10;
   var SHORT_VIDEO_TARGET = 5;
@@ -47,18 +49,69 @@
     return 0.35 * visibility + 0.25 * snr + 0.20 * acf + 0.10 * cross + 0.10 * saturation;
   }
 
-  // 先按质量排序，再剔除时间上过近的帧；返回顺序也按质量从高到低。
+  function calibrationRank(item) {
+    var status = item && item.calibrationStatus;
+    if (status === 'autoAccepted' || status === 'manualAccepted') return 2;
+    if (status === 'pending') return 1;
+    return 0;
+  }
+
+  function median(values) {
+    if (!values || !values.length) return NaN;
+    var sorted = values.slice().sort(function (a, b) { return a - b; });
+    var middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2
+      ? sorted[middle]
+      : (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  /* 只从已通过原有单帧门限的候选中选取主周期稳健簇。
+   * MAD 对少量漂移帧不敏感；簇宽以外的帧仍留在页面候选池中供用户检查。
+   */
+  function clusterCandidates(items, overrides) {
+    var o = options(overrides);
+    var valid = (items || [])
+      .filter(function (item) { return isValid(item, o) && !item.excluded; })
+      .map(function (item) {
+        return Object.assign({}, item, { score: isFinite(item.score) ? Number(item.score) : score(item) });
+      });
+    var values = valid.map(function (item) { return Number(item.deltaXPx); });
+    var center = median(values);
+    var deviations = values.map(function (value) { return Math.abs(value - center); });
+    var mad = median(deviations);
+    var tolerance = isFinite(mad) && mad > 0
+      ? Number(o.clusterMadScale) * 1.4826 * mad
+      : 0;
+    var clustered = valid.filter(function (item) {
+      return Math.abs(Number(item.deltaXPx) - center) <= tolerance + 1e-9;
+    });
+    return {
+      items: clustered,
+      validCount: valid.length,
+      clusterCount: clustered.length,
+      excludedCount: valid.length - clustered.length,
+      centerPx: isFinite(center) ? center : null,
+      madPx: isFinite(mad) ? mad : null,
+      tolerancePx: tolerance
+    };
+  }
+
+  // 先取主周期稳健簇，再优先选已有同帧标定证据者，最后按质量排序。
   function selectCandidates(items, overrides) {
     var o = options(overrides);
     var max = isFinite(o.maxCandidates) && Number(o.maxCandidates) > 0
       ? Math.floor(Number(o.maxCandidates))
       : 60;
-    return (items || [])
-      .filter(function (item) { return isValid(item, o) && !item.excluded; })
-      .map(function (item) {
-        return Object.assign({}, item, { score: isFinite(item.score) ? Number(item.score) : score(item) });
-      })
+    var cluster = clusterCandidates(items, o);
+    var center = cluster.centerPx;
+    return cluster.items
       .sort(function (a, b) {
+        var distanceA = Math.abs(Number(a.deltaXPx) - center);
+        var distanceB = Math.abs(Number(b.deltaXPx) - center);
+        if (distanceA !== distanceB) return distanceA - distanceB;
+        if (calibrationRank(b) !== calibrationRank(a)) {
+          return calibrationRank(b) - calibrationRank(a);
+        }
         if (b.score !== a.score) return b.score - a.score;
         return num(a.timeMs) - num(b.timeMs);
       })
@@ -199,6 +252,7 @@
     DEFAULTS: DEFAULTS,
     isValid: isValid,
     score: score,
+    clusterCandidates: clusterCandidates,
     selectCandidates: selectCandidates,
     summary: summary,
     isEnough: isEnough,

@@ -87,6 +87,16 @@ check('直播录制与视频导入已接线', () => {
   return 'record + adaptive import';
 });
 
+check('视频选择器显示稳定周期簇且保留原质量门限', () => {
+  assert(/clusterCandidates/.test(pcVideo));
+  assert(/稳定周期候选/.test(pcVideo));
+  assert(/qualityGate: 'standard'/.test(pcVideo));
+  assert(/maxCv:\s*0\.005/.test(
+    fs.readFileSync(path.join(root, 'js/core/video-sampler.js'), 'utf8')
+  ));
+  return '主周期稳健簇 + standard gate';
+});
+
 check('角色帧数、条纹数与预设来源标注', () => {
   assert(/stripeCount: item\.stripeCount/.test(pcVideo));
   assert(/meanStripeCount/.test(pcVideo));
@@ -104,7 +114,46 @@ check('照片导入保留角色、来源和条纹数', () => {
   assert(/stripeCount: r\.stripeCount/.test(pcFringe));
   assert(/source: 'photo'/.test(pcFringe));
   assert(/sourceName: input\.files\[0\]\.name/.test(pcFringe));
+  assert(/localCalibration: local\.calibration/.test(mobileJs));
+  assert(/localCalibration: local\.calibration/.test(pcFringe));
+  assert(/calibrateSameFrame/.test(mobileJs));
+  assert(/calibrateSameFrame/.test(pcFringe));
   return 'mobile + PC photo metadata';
+});
+
+check('逐帧同框标定核心在会话模块之前接入三端', () => {
+  for (const [name, html] of [['index.html', pc], ['mobile.html', mobile]]) {
+    const core = html.indexOf('js/core/frame-calibration.js');
+    const sessions = html.indexOf('js/core/sessions.js');
+    const data = html.indexOf('js/core/session-data.js');
+    assert(core >= 0, name + ' 未加载 frame-calibration.js');
+    assert(core < sessions, name + ' 核心顺序应为 frame-calibration -> sessions');
+    assert(sessions < data, name + ' 核心顺序应为 sessions -> session-data');
+  }
+  return 'frame-calibration -> sessions -> session-data';
+});
+
+check('视频候选展示逐帧标定状态且不再乘全局 k', () => {
+  assert(/calibrationStatus/.test(pcVideo));
+  assert(/无正式毫米值/.test(pcVideo));
+  assert(/calibrateSameFrame/.test(pcVideo));
+  assert(!/deltaXmm:\s*isFinite\(k\)[\s\S]{0,80}item\.deltaXPx\s*\*\s*k/.test(pcVideo));
+  assert(!/updateSession\(session\.id,[\s\S]{0,160}k_mm_px:\s*k/.test(pcVideo));
+  return '逐帧 k_i / pending 可见';
+});
+
+check('红光角色作为待测目标写入而非仅参考', () => {
+  assert(/referenceOnly:\s*false/.test(pcVideo));
+  assert(/wavelengthRole:\s*config\.role === 'reference'\s*\?\s*'target'\s*:\s*'standard'/.test(pcVideo));
+  return 'reference -> target';
+});
+
+check('缓存版本已刷新且不再使用线上旧版本 9e0c40e', () => {
+  const report = fs.readFileSync(path.join(root, 'report.html'), 'utf8');
+  assert(!/9e0c40e/.test(pc + mobile + report));
+  assert(/20261117-r3/.test(pc));
+  assert(/frame-calibration\.js/.test(report));
+  return '20261117-r3';
 });
 
 console.log(pass + ' pass / ' + fail + ' fail');

@@ -6,7 +6,7 @@
 <meta name="description" content="菲涅耳双棱镜三种测量路径的实验数据、来源审计与误差分析报告">
 <title>菲涅耳双棱镜 · AI 实验数据报告</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b1726'/%3E%3Cpath d='M5 23 L16 7 L27 23 Z' fill='none' stroke='%23d9aa56' stroke-width='2'/%3E%3Cpath d='M9 18 H23' stroke='%235fe0bd' stroke-width='2'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/report.css?v=9e0c40e">
+<link rel="stylesheet" href="css/report.css?v=20261124-r1">
 </head>
 <body>
 <a class="skip-link" href="#reportMain">跳到报告正文</a>
@@ -38,7 +38,7 @@
       <a href="#summary" class="active">结论摘要</a>
       <a href="#geometry">实测几何量</a>
       <a href="#methods">三方法对照</a>
-      <a href="#errors">三层误差</a>
+      <a href="#errors">误差分级</a>
       <a href="#trace">光线追迹</a>
       <a href="#audit">数据审计</a>
       <a href="#gallery">图片精选</a>
@@ -61,12 +61,12 @@
           <div id="summaryWarnings" class="warning-stack" aria-live="polite"></div>
         </div>
         <div class="hero-result" aria-live="polite">
-          <span class="result-label">比值法条件结果</span>
+          <span id="heroLabel" class="result-label">主方法实测结果</span>
           <strong id="heroValue">—</strong>
           <span id="heroUncertainty" class="result-unc">—</span>
           <div class="result-rule"></div>
           <dl class="result-meta">
-            <div><dt>相对 589.3 nm</dt><dd id="heroBias">—</dd></div>
+            <div><dt>与理论/标称 650 nm 比较</dt><dd id="heroBias">—</dd></div>
             <div><dt>数据完成度</dt><dd id="heroCompleteness">—</dd></div>
             <div><dt>结论状态</dt><dd id="heroStatus">—</dd></div>
           </dl>
@@ -74,6 +74,33 @@
       </div>
 
       <div class="metric-grid" id="metricGrid"></div>
+    </section>
+
+    <section id="steps" class="report-section" aria-labelledby="stepsTitle">
+      <header class="section-head">
+        <p class="eyebrow">主方法 · 钠光标准波长测红光</p>
+        <h2 id="stepsTitle">五步得到 λ_R，并标出未定量的部分</h2>
+        <p id="stepsLead" class="section-lead">正在计算钠光—红光比值法…</p>
+      </header>
+
+      <h3 class="steps-subtitle">A. 钠光与红光条纹数据摘要</h3>
+      <div id="stepsData" class="steps-table"></div>
+
+      <h3 class="steps-subtitle">B. 五步 A 类不确定度</h3>
+      <div id="stepsTable" class="steps-table"></div>
+
+      <h3 class="steps-subtitle">C. 误差传播公式（含三项未定量的 B 类）</h3>
+      <div id="stepsFormula" class="formula-box"></div>
+      <div id="stepsTerms" class="steps-table"></div>
+
+      <h3 class="steps-subtitle">D. 最终结果</h3>
+      <div id="stepsResult" class="steps-result"></div>
+
+      <h3 class="steps-subtitle">E. 与理论/标称 650 nm 比较</h3>
+      <div id="stepsCompare" class="steps-table"></div>
+
+      <h3 class="steps-subtitle">F. 来源审计与未定量说明</h3>
+      <div id="stepsAudit" class="steps-table"></div>
     </section>
 
     <section id="geometry" class="report-section" aria-labelledby="geometryTitle">
@@ -94,27 +121,20 @@
       <div class="section-heading">
         <div>
           <div class="section-eyebrow">METHOD COMPARISON</div>
-          <h2 id="methodsTitle">三种方法，各司其职</h2>
+          <h2 id="methodsTitle">单一主方法：钠光标准波长测红光</h2>
         </div>
-        <p>基本公式只作共同公式基础和误差基线；正式比较只保留三条独立解算路径。</p>
+        <p>正式结论只保留一条主方法：以钠光标准波长 589.3 nm 为基准，经同一光路的条纹间距比与棱镜色散修正得到红光波长。</p>
       </div>
       <div id="methodCards" class="method-grid"></div>
-      <div class="historical-note">
-        <div class="historical-title">
-          <span>历史模型 / 仿真基准</span>
-          <strong>不是本轮视频实测</strong>
-        </div>
-        <div id="historicalTable" class="historical-table"></div>
-      </div>
     </section>
 
     <section id="errors" class="report-section" aria-labelledby="errorsTitle">
       <div class="section-heading">
         <div>
           <div class="section-eyebrow">ERROR ARCHITECTURE</div>
-          <h2 id="errorsTitle">三层误差，不合成一个“漂亮精度”</h2>
+          <h2 id="errorsTitle">误差分级：只报可追溯的量</h2>
         </div>
-        <p>实测离散性、条件输入误差和准确度分开表达。点按误差条可展开来源与传播公式。</p>
+        <p>实测重复性、扩展不确定度与标称比较分开表达；未定量的系统项单独列出，不并入总误差，也不合成为一个“漂亮精度”。</p>
       </div>
       <div class="error-layout">
         <div class="error-budget-panel">
@@ -138,13 +158,6 @@
             <div>
               <h3>条件输入误差</h3>
               <p>参考波长、折射率等报告预设只进入条件预算；参数来源在审计表中逐项可查。</p>
-            </div>
-          </article>
-          <article>
-            <span class="layer-no">C</span>
-            <div>
-              <h3>准确度与一致性</h3>
-              <p id="consistencyText">—</p>
             </div>
           </article>
         </div>
@@ -186,6 +199,7 @@
         <button class="audit-filter" data-filter="reportPreset" type="button">报告预设</button>
         <button class="audit-filter" data-filter="modelTrace" type="button">模型追迹</button>
         <button class="audit-filter" data-filter="referenceOnly" type="button">仅参考</button>
+        <button class="audit-filter" data-filter="nominal" type="button">标称值</button>
         <button class="audit-filter" data-filter="missing" type="button">缺失</button>
       </div>
       <div class="table-scroll">
@@ -220,7 +234,7 @@
       <div class="appendix-grid">
         <article>
           <h3>为什么比值法仍需保留警告</h3>
-          <p>比值法能消去 d、D、k，但要求两段条纹处于同一像素缩放和采样口径。红光短片只有 5 个有效帧，帧间波动约 1.57%，因此这里只作参考性条件计算。</p>
+          <p>比值法能消去 d、D、k，但要求两段条纹处于同一像素缩放和采样口径。本轮实测快照为钠光 55 帧、红光 50 帧；条件情景（历史像素数据）只有 5 个像素证据帧，两者不是同一批数据，不得混用，也不得把 5 帧的波动率当作 50 帧的重复性。</p>
         </article>
         <article>
           <h3>d₁、d₂ 究竟怎样进入计算</h3>
@@ -232,7 +246,7 @@
         </article>
         <article>
           <h3>像素当量 k 的可信边界</h3>
-          <p>自动刻线能稳定识别相邻约 107.6 px，但 L=5 mm 仍只是报告预设。k=0.0040 mm/px 的条件波长会随 L 改变，不能用它宣称优于 1% 的绝对准确度。</p>
+          <p>实验者已确认相邻刻线实际间距为 1.00 mm。当前自动识别仍只有约 102.57 px、相对残差约 2.1%，处于待人工确认状态；k=0.0040 mm/px 仅保留为历史条件预设，不能冒充本轮逐帧标定。</p>
         </article>
         <article>
           <h3>为什么不用一个总精度概括</h3>
@@ -268,9 +282,10 @@
 
 <div id="reportToast" class="report-toast" role="status" aria-live="polite"></div>
 
-<script src="js/physics.js?v=9e0c40e"></script>
-<script src="js/core/report-errors.js?v=9e0c40e"></script>
-<script src="js/core/report-data.js?v=9e0c40e"></script>
-<script src="js/pages/report.js?v=9e0c40e"></script>
+<script src="js/physics.js?v=20261124-r1"></script>
+<script src="js/core/frame-calibration.js?v=20261124-r2"></script>
+<script src="js/core/report-errors.js?v=20261124-r1"></script>
+<script src="js/core/report-data.js?v=20261124-r1"></script>
+<script src="js/pages/report.js?v=20261124-r1"></script>
 </body>
 </html>

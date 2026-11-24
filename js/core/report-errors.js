@@ -75,57 +75,64 @@
     }, 0));
   }
 
-  /* 比值法：λ_Na = λ_ref·(Δx_Na/Δx_ref)·((n_Na−1)/(n_ref−1))。 */
+  /* 比值法（钠光标准 → 红光待测）：
+   * λ_R = λ_Na·(Δx_R/Δx_Na)·((n_R−1)/(n_Na−1))
+   * standard 角色 = 钠光条纹，target 角色 = 红光条纹；两者都必须是真实数据。
+   */
   function ratioConditional(inputs) {
     inputs = inputs || {};
-    var sodium = summaryFromStats(inputs.sodium);
-    var reference = summaryFromStats(inputs.reference);
-    if (!sodium || !reference) throw new Error('比值法需要钠光与参考两组有效帧');
-    if (!(num(inputs.lamRef) > 0)) throw new Error('参考波长必须为正数');
-    if (!(num(inputs.nNa) > 1) || !(num(inputs.nRef) > 1)) {
+    if (inputs.lamRef !== undefined && inputs.lambdaStandardNm === undefined) {
+      throw new Error('比值法方向已改为“钠光标准→红光待测”：请改传 lambdaStandardNm / nStandard / nTarget');
+    }
+    var std = summaryFromStats(inputs.standard || inputs.sodium);
+    var tgt = summaryFromStats(inputs.target || inputs.reference);
+    if (!std || !tgt) throw new Error('比值法需要钠光标准与红光待测两组有效帧');
+    if (!(num(inputs.lambdaStandardNm) > 0)) throw new Error('钠光标准波长必须为正数');
+    if (!(num(inputs.nStandard) > 1) || !(num(inputs.nTarget) > 1)) {
       throw new Error('两组折射率都必须大于 1');
     }
 
-    var lamRef = num(inputs.lamRef);
-    var nNa = num(inputs.nNa);
-    var nRef = num(inputs.nRef);
-    var dispersion = (nNa - 1) / (nRef - 1);
-    var valueNm = lamRef * (sodium.mean / reference.mean) * dispersion;
+    var lamStd = num(inputs.lambdaStandardNm);
+    var nStd = num(inputs.nStandard);
+    var nTgt = num(inputs.nTarget);
+    var dispersion = (nTgt - 1) / (nStd - 1);
+    var valueNm = lamStd * (tgt.mean / std.mean) * dispersion;
 
     var terms = [
       {
-        key: 'dxNa',
+        key: 'dxStandard',
         label: 'u(Δx_Na)/Δx_Na',
-        relU: sodium.uA !== null ? sodium.uA / sodium.mean : 0,
-        source: '钠光多帧均值标准误差'
+        relU: std.uA !== null ? std.uA / std.mean : 0,
+        source: '钠光标准条纹多帧均值标准误差'
       },
       {
-        key: 'dxRef',
-        label: 'u(Δx_ref)/Δx_ref',
-        relU: reference.uA !== null ? reference.uA / reference.mean : 0,
-        source: '红光参考多帧均值标准误差'
+        key: 'dxTarget',
+        label: 'u(Δx_R)/Δx_R',
+        relU: tgt.uA !== null ? tgt.uA / tgt.mean : 0,
+        source: '红光待测条纹多帧均值标准误差'
       },
       {
-        key: 'lamRef',
-        label: 'u(λ_ref)/λ_ref',
-        relU: relativeTerm(lamRef, inputs.uLamRef) || 0,
-        source: '参考波长输入'
+        key: 'lambdaStandard',
+        label: 'u(λ_Na)/λ_Na',
+        relU: relativeTerm(lamStd, inputs.uLambdaStandard) || 0,
+        source: '钠光标准波长（标准值 589.3 nm，不计入测量不确定度）'
       },
       {
-        key: 'nNa',
+        key: 'nStandard',
         label: 'u(n_Na)/(n_Na−1)',
-        relU: relativeTerm(nNa - 1, inputs.uNNa) || 0,
-        source: '钠光折射率输入'
+        relU: relativeTerm(nStd - 1, inputs.uNStandard) || 0,
+        source: '钠光折射率（N-BK7 假设值）'
       },
       {
-        key: 'nRef',
-        label: 'u(n_ref)/(n_ref−1)',
-        relU: relativeTerm(nRef - 1, inputs.uNRef) || 0,
-        source: '参考光折射率输入'
+        key: 'nTarget',
+        label: 'u(n_R)/(n_R−1)',
+        relU: relativeTerm(nTgt - 1, inputs.uNTarget) || 0,
+        source: '红光折射率（N-BK7 假设值）'
       }
     ];
     var relativeU = rootSumSquare(terms.map(function (item) { return item.relU; }));
-    var accuracyResult = accuracy(valueNm, inputs.standardNm || 589.3);
+    /* 650 nm 只是激光器标称值，仅作比较，不作为已校准真值。 */
+    var accuracyResult = accuracy(valueNm, inputs.nominalTargetNm || 650);
 
     return {
       valueNm: valueNm,
@@ -135,12 +142,185 @@
       relativeBias: accuracyResult.relativeBias,
       dispersion: dispersion,
       conditional: inputs.conditional !== false,
-      referenceOnly: inputs.referenceOnly === true,
-      sodium: sodium,
-      reference: reference,
+      targetOnly: inputs.referenceOnly === true,
+      standard: std,
+      target: tgt,
       terms: terms,
       accuracy: accuracyResult,
-      formula: 'λ_Na = λ_ref·(Δx_Na/Δx_ref)·((n_Na−1)/(n_ref−1))'
+      accuracyBasis: '与激光器标称 650 nm 的比较（非已校准真值）',
+      formula: 'λ_R = λ_Na·(Δx_R/Δx_Na)·((n_R−1)/(n_Na−1))'
+    };
+  }
+
+  /* 双侧 95% 的 t 分位（ν 为有效自由度），表值 + 线性插值。
+   * ν_eff 由 Welch–Satterthwaite 合成，只用于“仅 A 类重复性”的扩展不确定度。
+   */
+  var T95 = [
+    [1, 12.706], [2, 4.303], [3, 3.182], [4, 2.776], [5, 2.571],
+    [6, 2.447], [7, 2.365], [8, 2.306], [9, 2.262], [10, 2.228],
+    [12, 2.179], [15, 2.131], [20, 2.086], [25, 2.060], [30, 2.042],
+    [40, 2.021], [50, 2.009], [60, 2.000], [80, 1.990], [100, 1.984],
+    [120, 1.980], [1e9, 1.960]
+  ];
+
+  function t95(nu) {
+    var v = num(nu);
+    if (!(v > 0)) return 1.960;
+    for (var i = 0; i < T95.length - 1; i++) {
+      var a = T95[i], b = T95[i + 1];
+      if (v <= b[0]) {
+        var span = b[0] - a[0];
+        var w = span > 0 ? (v - a[0]) / span : 1;
+        return a[1] + (b[1] - a[1]) * Math.max(0, Math.min(1, w));
+      }
+    }
+    return 1.960;
+  }
+
+  /* 绝对不确定度保留 1 位有效数字并“只进不舍”（课堂幻灯片规则）。 */
+  function roundUpOneSig(value) {
+    var v = Math.abs(num(value));
+    if (!(v > 0)) return 0;
+    var exp = Math.floor(Math.log10(v));
+    var scale = Math.pow(10, exp);
+    var scaled = v / scale;
+    var up = Math.ceil(scaled * 1.0000001);
+    return up * scale;
+  }
+
+  /* 五步 A 类（重复性）预算：钠光标准 → 红光待测。
+   * 只传播两项条纹间距的重复性；λ_Na、n_R、n_Na 的 B 类分量没有有效来源，
+   * 一律标为“未定量”，不以 0 补齐，也不并入 U_r。
+   */
+  function ratioTypeABudget(inputs) {
+    inputs = inputs || {};
+    var std = summaryFromStats(inputs.standard);
+    var tgt = summaryFromStats(inputs.target);
+    if (!std || !tgt) throw new Error('A 类预算需要钠光标准与红光待测两组有效帧');
+    var lamStd = num(inputs.lambdaStandardNm);
+    var nStd = num(inputs.nStandard);
+    var nTgt = num(inputs.nTarget);
+    if (!(lamStd > 0) || !(nStd > 1) || !(nTgt > 1)) {
+      throw new Error('标准波长与两组折射率必须有效');
+    }
+
+    /* ---- 第 1 步：测量值 ---- */
+    var dispersion = (nTgt - 1) / (nStd - 1);
+    var ratio = tgt.mean / std.mean;
+    var valueNm = lamStd * ratio * dispersion;
+
+    /* ---- 第 2 步：A 类相对不确定度 ---- */
+    var uAT = tgt.uA !== null ? tgt.uA / tgt.mean : null;
+    var uAS = std.uA !== null ? std.uA / std.mean : null;
+    var uARel = Math.sqrt((uAT || 0) * (uAT || 0) + (uAS || 0) * (uAS || 0));
+    var uANm = valueNm * uARel;
+
+    /* 有效自由度（Welch–Satterthwaite），只含这两个 A 类项 */
+    var nuEff = null;
+    var sT = (uAT || 0) * (uAT || 0);
+    var sS = (uAS || 0) * (uAS || 0);
+    var dofT = tgt.uA !== null ? tgt.n - 1 : 0;
+    var dofS = std.uA !== null ? std.n - 1 : 0;
+    var denom = (dofT > 0 ? Math.pow(sT, 2) / dofT : 0) +
+                (dofS > 0 ? Math.pow(sS, 2) / dofS : 0);
+    if (denom > 0) nuEff = Math.pow(sT + sS, 2) / denom;
+
+    /* ---- 第 3 步：扩展相对不确定度 ---- */
+    var tFactor = t95(nuEff);
+    var ur95 = tFactor * uARel;
+
+    /* ---- 第 4 步：绝对不确定度（内部不提前舍入） ---- */
+    var u95Nm = valueNm * ur95;
+    var u95Rounded = roundUpOneSig(u95Nm);
+
+    /* ---- 第 5 步：结果表达式 ---- */
+    var decimals = Math.max(0, -Math.floor(Math.log10(u95Rounded)));
+    var expression = '(' + valueNm.toFixed(decimals) + ' ± ' + u95Rounded.toFixed(decimals) + ') nm';
+
+    /* ---- 与理论/标称值的比较（650 nm 未独立校准） ---- */
+    var nominal = num(inputs.nominalTargetNm);
+    var comparison = null;
+    if (nominal > 0) {
+      var delta = valueNm - nominal;
+      var rel = delta / nominal;
+      comparison = {
+        nominalNm: nominal,
+        deltaNm: delta,
+        deltaAligned: delta.toFixed(decimals) * 1,
+        deltaText: '(' + delta.toFixed(decimals) + ' ± ' + u95Rounded.toFixed(decimals) + ') nm',
+        relativeDiff: rel,
+        relativeDiffPercent: rel * 100,
+        basis: '与理论/标称 ' + nominal + ' nm 比较；该值未独立校准，不得写作“真实误差”或“方法误差”'
+      };
+    }
+
+    /* ---- 误差传播：五项，缺依据的标未定量 ---- */
+    var terms = [
+      {
+        key: 'dxTarget', label: 'u(Δx_R)/Δx_R',
+        relU: uAT, value: tgt.mean, unit: 'mm',
+        source: '红光待测条纹 ' + tgt.n + ' 帧，s/√n',
+        quantified: uAT !== null, kind: 'A'
+      },
+      {
+        key: 'dxStandard', label: 'u(Δx_Na)/Δx_Na',
+        relU: uAS, value: std.mean, unit: 'mm',
+        source: '钠光标准条纹 ' + std.n + ' 帧，s/√n',
+        quantified: uAS !== null, kind: 'A'
+      },
+      {
+        key: 'lambdaStandard', label: 'u(λ_Na)/λ_Na',
+        relU: null, value: lamStd, unit: 'nm',
+        source: '钠黄光标准波长（国际标准值）',
+        quantified: false, kind: 'B',
+        note: '未定量：作为标准值使用，不再引入测量不确定度'
+      },
+      {
+        key: 'nTarget', label: 'u(n_R)/(n_R−1)',
+        relU: null, value: nTgt, unit: '',
+        source: 'N-BK7 折射率假设值',
+        quantified: false, kind: 'B',
+        note: '未定量：缺材料证书与色散实测'
+      },
+      {
+        key: 'nStandard', label: 'u(n_Na)/(n_Na−1)',
+        relU: null, value: nStd, unit: '',
+        source: 'N-BK7 折射率假设值',
+        quantified: false, kind: 'B',
+        note: '未定量：缺材料证书与色散实测'
+      }
+    ];
+
+    return {
+      valueNm: valueNm,
+      dispersion: dispersion,
+      ratio: ratio,
+      standard: std,
+      target: tgt,
+      /* 第 2 步 */
+      uATargetRel: uAT,
+      uAStandardRel: uAS,
+      uARel: uARel,
+      uANm: uANm,
+      /* 第 3 步 */
+      degrees: { target: tgt.n - 1, standard: std.n - 1 },
+      nuEff: nuEff,
+      tFactor: tFactor,
+      ur95: ur95,
+      /* 第 4、5 步 */
+      u95Nm: u95Nm,
+      u95Rounded: u95Rounded,
+      expression: expression,
+      ur95Percent: ur95 * 100,
+      /* 说明 */
+      scope: '仅 A 类重复性项（P=95%）',
+      isCompleteBudget: false,
+      terms: terms,
+      unquantified: terms.filter(function (x) { return !x.quantified; }),
+      comparison: comparison,
+      /* 单帧重复性（与均值扩展不确定度是两个口径） */
+      singleFrameRelative: tgt.sd !== null && tgt.mean ? tgt.sd / tgt.mean : null,
+      singleFrameNm: tgt.sd !== null ? tgt.sd * valueNm / tgt.mean : null
     };
   }
 
@@ -216,7 +396,10 @@
     ratioConditional: ratioConditional,
     accuracy: accuracy,
     chi2Critical95: chi2Critical95,
-    chiSquareConsistency: chiSquareConsistency
+    chiSquareConsistency: chiSquareConsistency,
+    ratioTypeABudget: ratioTypeABudget,
+    roundUpOneSig: roundUpOneSig,
+    t95: t95,
   };
 
   global.BP = global.BP || {};

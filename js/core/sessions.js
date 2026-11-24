@@ -18,8 +18,8 @@
   var memory = { sessions: [], active: null, blobs: new Map() };
 
   var ROLE_LABEL = {
-    sodium: '钠光条纹',
-    reference: '激光参考条纹',
+    sodium: '钠光标准条纹',
+    reference: '红光待测条纹',
     no_lens: '无透镜条纹',
     with_lens: '加透镜条纹',
     calibration: '标定图'
@@ -57,8 +57,12 @@
       sources: { d: '报告预设', D: '报告预设' }
     },
     ratio: {
-      params: { lamRef: 650, nNa: 1.5168, nRef: 1.5145 },
-      sources: { lamRef: '报告预设', nNa: '报告预设', nRef: '报告预设' }
+      params: { lambdaStandardNm: 589.3, nStandard: 1.5168, nTarget: 1.5145 },
+      sources: {
+        lambdaStandardNm: '标准值（报告预设，非实测）',
+        nStandard: 'N-BK7 折射率报告预设，非实测',
+        nTarget: 'N-BK7 折射率报告预设，非实测'
+      }
     },
     magnification: {
       params: { dPrime: 3.969, beta: 4.4, D: 1000 },
@@ -97,6 +101,29 @@
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
   function numericOrNull(value) {
     return value !== null && value !== '' && isFinite(value) ? Number(value) : null;
+  }
+  function frameStatus(frame) {
+    if (global.BP && global.BP.frameCalibration &&
+        typeof global.BP.frameCalibration.calibrationStatus === 'function') {
+      return global.BP.frameCalibration.calibrationStatus(frame);
+    }
+    if (frame && frame.localCalibration && frame.localCalibration.status) {
+      return frame.localCalibration.status;
+    }
+    if (frame && frame.calibrationStatus) return frame.calibrationStatus;
+    return 'legacyGlobalK';
+  }
+  function isFormalFrame(frame) {
+    var status = frameStatus(frame);
+    var deltaXmm = numericOrNull(frame && frame.deltaXmm);
+    var referenceOnly = !!(frame && frame.selection &&
+      frame.selection.referenceOnly === true);
+    return !!frame &&
+      frame.excluded !== true &&
+      !referenceOnly &&
+      (status === 'autoAccepted' || status === 'manualAccepted') &&
+      deltaXmm !== null &&
+      deltaXmm > 0;
   }
 
   function openDB() {
@@ -236,6 +263,11 @@
       deltaXPx: numericOrNull(frame.deltaXPx),
       deltaXmm: numericOrNull(frame.deltaXmm),
       stripeCount: numericOrNull(frame.stripeCount),
+      localCalibration: frame.localCalibration || null,
+      calibrationStatus: frame.calibrationStatus ||
+        (frame.localCalibration && frame.localCalibration.status) ||
+        'legacyGlobalK',
+      sourcePixels: frame.sourcePixels || null,
       quality: numericOrNull(frame.quality),
       source: frame.source || '',
       sourceName: frame.sourceName || '',
@@ -283,30 +315,78 @@
   }
 
   function roleStats(sessionId, role) {
-    var frames = listFrames(sessionId, role).filter(function (f) {
-      return !f.excluded && f.deltaXPx !== null && isFinite(f.deltaXPx);
+    var evidenceFrames = listFrames(sessionId, role).filter(function (frame) {
+      return frame && frame.excluded !== true;
     });
-    var values = frames.map(function (f) { return Number(f.deltaXPx); });
-    var stripeValues = frames.map(function (f) { return Number(f.stripeCount); })
+    var frames = evidenceFrames.filter(isFormalFrame);
+    /*
+     * 像素间距和条纹数属于识别证据：只要该帧未被人工排除即可统计。
+     * 正式毫米值必须等待同帧刻线自动或人工确认，保持更严格的口径。
+     */
+    var pxValues = evidenceFrames.map(function (frame) {
+      return numericOrNull(frame.deltaXPx);
+    }).filter(function (value) { return value !== null && value > 0; });
+    var mmValues = frames.map(function (frame) {
+      return numericOrNull(frame.deltaXmm);
+    }).filter(function (value) { return value !== null && value > 0; });
+    var stripeValues = evidenceFrames.map(function (f) { return Number(f.stripeCount); })
       .filter(function (value) { return isFinite(value) && value > 0; });
-    var mean = values.reduce(function (a, b) { return a + b; }, 0) / (values.length || 1);
-    var sd = 0;
-    if (values.length > 1) {
-      sd = Math.sqrt(values.reduce(function (a, b) {
-        return a + (b - mean) * (b - mean);
+    var kValues = frames.map(function (frame) {
+      return numericOrNull(frame.localCalibration && frame.localCalibration.kMmPx);
+    }).filter(function (value) { return value !== null && value > 0; });
+    var lineCounts = frames.map(function (frame) {
+      return numericOrNull(frame.localCalibration && frame.localCalibration.lineCount);
+    }).filter(function (value) { return value !== null && value > 0; });
+    var relativeRms = frames.map(function (frame) {
+      return numericOrNull(frame.localCalibration && frame.localCalibration.relativeRms);
+    }).filter(function (value) { return value !== null && value >= 0; });
+    function average(values) {
+      return values.length
+        ? values.reduce(function (sum, value) { return sum + value; }, 0) / values.length
+        : NaN;
+    }
+    function sampleSd(values, avg) {
+      if (values.length < 2) return NaN;
+      return Math.sqrt(values.reduce(function (sum, value) {
+        return sum + (value - avg) * (value - avg);
       }, 0) / (values.length - 1));
     }
+    var meanPx = average(pxValues);
+    var meanMm = average(mmValues);
+    var statusCounts = evidenceFrames.reduce(function (counts, frame) {
+      var status = frameStatus(frame);
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {});
     return {
       role: role,
       label: ROLE_LABEL[role],
-      n: values.length,
-      meanPx: values.length ? mean : NaN,
-      sdPx: values.length > 1 ? sd : NaN,
-      stabilityOk: frames.every(function (frame) {
+      n: frames.length,
+      nEvidence: evidenceFrames.length,
+      nPx: pxValues.length,
+      nMm: mmValues.length,
+      meanPx: meanPx,
+      sdPx: sampleSd(pxValues, meanPx),
+      meanMm: meanMm,
+      sdMm: sampleSd(mmValues, meanMm),
+      meanKMmPx: average(kValues),
+      kMinMmPx: kValues.length ? Math.min.apply(null, kValues) : NaN,
+      kMaxMmPx: kValues.length ? Math.max.apply(null, kValues) : NaN,
+      meanLineCount: average(lineCounts),
+      maxRelativeRms: relativeRms.length ? Math.max.apply(null, relativeRms) : NaN,
+      autoAccepted: statusCounts.autoAccepted || 0,
+      manualAccepted: statusCounts.manualAccepted || 0,
+      pending: statusCounts.pending || 0,
+      rejected: statusCounts.rejected || 0,
+      legacyGlobalK: statusCounts.legacyGlobalK || 0,
+      stabilityOk: evidenceFrames.every(function (frame) {
         return !frame.selection || frame.selection.stabilityOk !== false;
       }),
+      referenceOnly: evidenceFrames.some(function (frame) {
+        return !!(frame.selection && frame.selection.referenceOnly === true);
+      }),
       meanStripeCount: stripeValues.length
-        ? stripeValues.reduce(function (sum, value) { return sum + value; }, 0) / stripeValues.length
+        ? average(stripeValues)
         : NaN
     };
   }

@@ -42,6 +42,89 @@ const stable = Array.from({ length: 20 }, (_, i) => ({
 assert.strictEqual(S.summary(stable).n, 20, '应统计全部有效候选');
 assert.strictEqual(S.summary(stable).meanStripeCount, 12.5, '应统计平均可见条纹数');
 assert.strictEqual(S.summary(stable).cv <= 0.005, true, '示例数据应满足稳定度');
+
+const calibrationPriority = S.selectCandidates([
+  { ...good, timeMs: 0, score: 0.99, calibrationStatus: 'rejected' },
+  { ...good, timeMs: 600, score: 0.60, calibrationStatus: 'autoAccepted' },
+  { ...good, timeMs: 1200, score: 0.90, calibrationStatus: 'pending' }
+], { minGapMs: 500, maxCandidates: 3 });
+assert.deepStrictEqual(
+  calibrationPriority.map(item => item.calibrationStatus),
+  ['autoAccepted', 'pending', 'rejected'],
+  '质量门限通过后应优先保留同帧标定证据，不能降低单帧质量门禁'
+);
+
+/* 真实视频中常有少量高分行伴随周期漂移。
+ * 选择器应优先取主周期附近的稳定簇，而不是让这些高分行挤掉多数稳定帧。
+ */
+const driftOutliers = Array.from({ length: 8 }, (_, i) => ({
+  ...good,
+  timeMs: i * 600,
+  deltaXPx: 108 + (i % 2 ? 0.3 : -0.3),
+  score: 0.99,
+  calibrationStatus: 'autoAccepted'
+}));
+const stablePeriodCluster = Array.from({ length: 20 }, (_, i) => ({
+  ...good,
+  timeMs: 6000 + i * 600,
+  deltaXPx: 100 + (i % 2 ? 0.04 : -0.04),
+  score: 0.70,
+  calibrationStatus: 'rejected'
+}));
+const clusterPicked = S.selectCandidates(
+  driftOutliers.concat(stablePeriodCluster),
+  { minGapMs: 500, maxCandidates: 20 }
+);
+assert.strictEqual(clusterPicked.length, 20, '稳定周期簇足够时应选满目标帧数');
+assert.strictEqual(
+  clusterPicked.every(item => Math.abs(item.deltaXPx - 100) <= 0.05),
+  true,
+  '周期明显偏离的高分帧不得挤占稳定周期簇'
+);
+assert.strictEqual(
+  S.summary(clusterPicked).cv <= S.DEFAULTS.maxCv,
+  true,
+  '稳定周期簇应满足现有波动门限'
+);
+
+const edgeHighScore = Array.from({ length: 20 }, (_, i) => ({
+  ...good,
+  timeMs: i * 600,
+  deltaXPx: 100 + (i % 2 ? 0.8 : -0.8),
+  score: 0.99,
+  calibrationStatus: 'autoAccepted'
+}));
+const centerLowScore = Array.from({ length: 20 }, (_, i) => ({
+  ...good,
+  timeMs: 8000 + i * 600,
+  deltaXPx: 100 + (i % 2 ? 0.02 : -0.02),
+  score: 0.60,
+  calibrationStatus: 'rejected'
+}));
+const centerPicked = S.selectCandidates(
+  edgeHighScore.concat(centerLowScore),
+  { minGapMs: 500, maxCandidates: 20 }
+);
+assert.strictEqual(
+  centerPicked.every(item => Math.abs(item.deltaXPx - 100) <= 0.03),
+  true,
+  '簇内帧数超过目标时应优先保留距主周期中心最近的帧'
+);
+assert.strictEqual(
+  S.summary(centerPicked).cv <= S.DEFAULTS.maxCv,
+  true,
+  '簇内第二轮选择也必须满足现有波动门限'
+);
+
+assert.strictEqual(
+  S.isEnough(
+    driftOutliers.concat(stablePeriodCluster.slice(0, 5)),
+    20
+  ),
+  false,
+  '稳定周期簇不足时必须继续明确拒绝，不能用离群帧凑数'
+);
+
 assert.strictEqual(S.isEnough(stable, 20), true, '20 个稳定候选应判定为足够');
 assert.strictEqual(S.isEnough(stable.slice(0, 19), 20), false, '不足目标数时不应提示足够');
 assert.strictEqual(
@@ -94,4 +177,4 @@ assert.deepStrictEqual(
   '用户手动选择 5 帧后，长视频应尊重用户选择'
 );
 
-console.log('视频抽帧评分检查通过（27 项）');
+console.log('视频抽帧评分检查通过（30 项）');

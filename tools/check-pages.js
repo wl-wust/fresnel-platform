@@ -84,6 +84,9 @@ if (fs.existsSync(idxPath)) {
   const iSessions = idx.indexOf('core/sessions.js'), iSessionData = idx.indexOf('core/session-data.js');
   check('首页在会话模块之后加载 session-data.js',
         iSessionData > iSessions && iSessions >= 0, 'sessions@' + iSessions + ' data@' + iSessionData);
+  const iFrameCal = idx.indexOf('core/frame-calibration.js');
+  check('逐帧刻线核心在会话模块之前加载',
+        iFrameCal >= 0 && iFrameCal < iSessions, 'calibration@' + iFrameCal + ' sessions@' + iSessions);
   const iPc = idx.indexOf('pages/pc.js'), iPcF = idx.indexOf('pages/pc-fringe.js');
   check('pages/pc-fringe.js 在 pc.js 之后', iPcF > iPc && iPc >= 0, 'pc@' + iPc + ' pc-fringe@' + iPcF);
   check('首页有「内含自检」与「导入手机记录」按钮',
@@ -107,6 +110,13 @@ if (fs.existsSync(mobilePath)) {
   const mSessions = mobile.indexOf('core/sessions.js'), mSessionData = mobile.indexOf('core/session-data.js');
   check('手机端在会话模块之后加载 session-data.js',
         mSessionData > mSessions && mSessions >= 0, 'sessions@' + mSessions + ' data@' + mSessionData);
+  const mFrameCal = mobile.indexOf('core/frame-calibration.js');
+  check('手机端逐帧刻线核心在会话模块之前加载',
+        mFrameCal >= 0 && mFrameCal < mSessions, 'calibration@' + mFrameCal + ' sessions@' + mSessions);
+  const mobileJs = path.join(REPO, 'js', 'pages', 'mobile.js');
+  const mobileSource = fs.existsSync(mobileJs) ? fs.readFileSync(mobileJs, 'utf8') : '';
+  check('手机端照片调用同框逐帧标定',
+        /calibrateSameFrame\s*\(/.test(mobileSource));
   check('手机端提供「从当前会话填入」按钮与来源摘要',
         /onclick="fillSessionData\(\)"/.test(mobile) && /\sid="sessionDataSummary"/.test(mobile));
 } else {
@@ -153,6 +163,10 @@ if (fs.existsSync(reportPath)) {
   check('报告页包含三方法、追迹图、来源审计和图片墙',
         /\sid="methodCards"/.test(report) && /\sid="traceChart"/.test(report) &&
         /\sid="auditBody"/.test(report) && /\sid="galleryGrid"/.test(report));
+  const reportJs = path.join(REPO, 'js', 'pages', 'report.js');
+  const reportSource = fs.existsSync(reportJs) ? fs.readFileSync(reportJs, 'utf8') : '';
+  check('报告页保留旧全局 k 条件情景且不冒充正式方法',
+        /legacyConditional/.test(reportSource) && /条件情景/.test(reportSource));
 } else {
   check('存在 report.html', false);
 }

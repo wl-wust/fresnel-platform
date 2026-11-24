@@ -27,7 +27,10 @@
              'dataTableBody', 'uncInputs', 'uncResult',
              'combineBody', 'combineResult', 'recordFile', 'recordResult', 'sessionDataSummary'];
 
-  var REPORT = { d: 0.90213, D: 1000, k: 0.0040, nNa: 1.5168, nRef: 1.5145 };
+  var REPORT = {
+    d: 0.90213, D: 1000, k: 0.0040,
+    lambdaStandardNm: 589.3, nStandard: 1.5168, nTarget: 1.5145
+  };
   // 三条路径共用同一批 Δx（报告 8.2）；表 8.1 的 u(Δx)/Δx
   var COMMON_REL_U = 6.4e-6;
 
@@ -86,17 +89,18 @@
         D: num('param_D', REPORT.D),
         a: 50,
         A: 1.0,
-        nNa: REPORT.nNa,
-        nRef: REPORT.nRef,
+        lambdaStandardNm: REPORT.lambdaStandardNm,
+        nStandard: REPORT.nStandard,
+        nTarget: REPORT.nTarget,
         b: 0.08,
-        lamRef: 650
+        nominalTargetNm: 650
       },
       paramsSources: {
         d: inputSource(dEl, '报告预设'),
         D: inputSource(DEl, '报告预设'),
-        lamRef: '报告预设',
-        nNa: '报告预设',
-        nRef: '报告预设'
+        lambdaStandardNm: '标准值（报告预设，非实测）',
+        nStandard: 'N-BK7 折射率报告预设，非实测',
+        nTarget: 'N-BK7 折射率报告预设，非实测'
       }
     });
   }
@@ -195,8 +199,10 @@
     var roles = S().requiredRoles(session.method);
     roles.forEach(function (role) {
       var stat = S().roleStats(session.id, role);
-      var chip = el('span', 'role-chip ' + (stat.n ? 'is-done' : 'is-missing'));
-      chip.textContent = stat.label + '：' + stat.n + ' 帧' +
+      var chip = el('span', 'role-chip ' +
+        (stat.n ? 'is-done' : (stat.nEvidence ? 'is-evidence' : 'is-missing')));
+      chip.textContent = stat.label + '：正式 ' + stat.n + ' 帧' +
+        (stat.nEvidence > stat.n ? ' / 证据 ' + stat.nEvidence + ' 帧' : '') +
         (Number.isFinite(stat.meanStripeCount)
           ? ' · 约 ' + stat.meanStripeCount.toFixed(0) + ' 条'
           : '');
@@ -215,20 +221,46 @@
     var role = $('roleSelect') ? $('roleSelect').value : 'sodium';
     if (!host || !session || !S()) return;
     var stat = S().roleStats(session.id, role);
-    if (!stat.n) {
+    if (!stat.n && !stat.nEvidence) {
       show('roleSummary', false);
       return;
     }
     BP.ui.result(host, [
       { label: '角色', value: stat.label, cls: 'is-key' },
-      { label: '启用帧数', value: String(stat.n) },
+      { label: '正式帧数', value: String(stat.n) },
+      {
+        label: '标定状态',
+        value: '自动 ' + stat.autoAccepted + ' · 人工 ' + stat.manualAccepted +
+          ' · 待确认 ' + stat.pending + ' · 拒绝 ' + stat.rejected +
+          ' · 旧全局 k ' + stat.legacyGlobalK,
+        cls: stat.autoAccepted + stat.manualAccepted ? '' : 'is-warn'
+      },
       { label: '平均条纹数', value: Number.isFinite(stat.meanStripeCount)
         ? stat.meanStripeCount.toFixed(1) + ' 条'
         : '—' },
       { label: '稳定性', value: stat.stabilityOk ? '通过' : '波动偏大，仅参考',
         cls: stat.stabilityOk ? '' : 'is-warn' },
       { label: 'Δx 均值', value: isFinite(stat.meanPx) ? F.px(stat.meanPx) + ' px' : '—' },
-      { label: 'Δx 标准差', value: isFinite(stat.sdPx) ? F.px(stat.sdPx) + ' px' : '—（单帧）' }
+      { label: 'Δx 标准差', value: isFinite(stat.sdPx) ? F.px(stat.sdPx) + ' px' : '—（单帧）' },
+      {
+        label: '逐帧毫米均值',
+        value: isFinite(stat.meanMm) ? F.mm(stat.meanMm) + ' mm' : '—（无正式标定）',
+        cls: isFinite(stat.meanMm) ? '' : 'is-warn'
+      },
+      {
+        label: '逐帧 k 范围',
+        value: isFinite(stat.meanKMmPx)
+          ? F.sci(stat.meanKMmPx) + ' mm/px（' +
+            stat.kMinMmPx.toPrecision(5) + '–' + stat.kMaxMmPx.toPrecision(5) + '）'
+          : '—'
+      },
+      {
+        label: '刻线证据',
+        value: isFinite(stat.meanLineCount)
+          ? '平均 ' + stat.meanLineCount.toFixed(1) + ' 条 · 最大相对残差 ' +
+            stat.maxRelativeRms.toPrecision(3)
+          : '—'
+      }
     ], { caption: sessionText(session) });
     show('roleSummary', true);
   }
@@ -259,6 +291,18 @@
           : (frame.analysisError ? '识别失败' : '未识别')));
       card.appendChild(meta);
       var actions = el('div', 'frame-actions');
+      var canManualCalibrate = BP.frameCalibration &&
+        BP.frameCalibration.applyManualReticle &&
+        BP.frameCalibration.attachLocalCalibration &&
+        finiteNumber(frame.deltaXPx) !== null &&
+        !BP.frameCalibration.isFormalFrame(frame);
+      if (canManualCalibrate) {
+        var manual = el('button', 'btn-mini', '同框手点确认');
+        manual.addEventListener('click', function () {
+          openFrameManualCalibration(session, frame, card);
+        });
+        actions.appendChild(manual);
+      }
       var toggle = el('button', 'btn-mini', frame.excluded ? '启用' : '排除');
       toggle.addEventListener('click', function () {
         S().setFrameExcluded(session.id, frame.id, !frame.excluded);
@@ -279,6 +323,175 @@
     });
   }
 
+  /*
+   * 手机端单帧人工确认：用户在当前照片上看两次刻线点击，
+   * 坐标换算回源图后复用核心的同帧两点标定，确认后才生成毫米值。
+   */
+  function openFrameManualCalibration(session, frame, card) {
+    if (!card || !BP.frameCalibration) return;
+    S().getFrameBlob(frame.imageKey).then(function (blob) {
+      if (!blob) throw new Error('该帧原始图片不可用');
+      var image = new global.Image();
+      image.onload = function () {
+        var sourceWidth = image.naturalWidth || image.width;
+        var sourceHeight = image.naturalHeight || image.height;
+        var scale = frame.analysis && finiteNumber(frame.analysis.analysisScale) !== null
+          ? finiteNumber(frame.analysis.analysisScale)
+          : Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
+        var width = Math.max(32, Math.round(sourceWidth * scale));
+        var height = Math.max(32, Math.round(sourceHeight * scale));
+
+        var panel = el('div', 'manual-calibration-panel');
+        var tip = el('p', 'hint', '请在同一张照片上依次点击两条相邻主刻线；两次点击会自动投影到同一高度。');
+        var canvas = doc.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+        canvas.style.touchAction = 'manipulation';
+        var cancel = el('button', 'btn-mini', '取消');
+        var points = [];
+        var context = canvas.getContext('2d', { willReadFrequently: true });
+        var analysisPixels = null;
+
+        // 先截取不含标注线的画面，供两次手点的邻域斜率估计使用。
+        context.drawImage(image, 0, 0, width, height);
+        analysisPixels = context.getImageData(0, 0, width, height).data;
+
+        function draw() {
+          context.drawImage(image, 0, 0, width, height);
+          var local = frame.localCalibration;
+          var knownLines = local && Array.isArray(local.linePositionsPx)
+            ? local.linePositionsPx
+            : [];
+          context.strokeStyle = 'rgba(0,255,136,0.9)';
+          context.fillStyle = '#b8ffe4';
+          context.lineWidth = 1.2;
+          knownLines.forEach(function (sourceX, index) {
+            var x = Number(sourceX) * scale;
+            context.beginPath();
+            context.moveTo(x, 0);
+            context.lineTo(x, height);
+            context.stroke();
+            context.fillText('L' + (index + 1), x + 3, 14);
+          });
+          points.forEach(function (point, index) {
+            context.beginPath();
+            context.arc(point.x, point.y, 5, 0, Math.PI * 2);
+            context.fillStyle = index === 0 ? '#ffd93d' : '#00d4ff';
+            context.fill();
+            context.fillStyle = '#fff';
+            context.fillText(String(index + 1), point.x + 7, point.y - 7);
+          });
+          if (points.length === 2) {
+            context.strokeStyle = '#00ff88';
+            context.beginPath();
+            context.moveTo(points[0].x, points[0].y);
+            context.lineTo(points[1].x, points[1].y);
+            context.stroke();
+          }
+        }
+
+        canvas.addEventListener('click', function (event) {
+          var rect = canvas.getBoundingClientRect();
+          if (!rect.width || !rect.height) return;
+          var point = {
+            x: (event.clientX - rect.left) * width / rect.width,
+            y: (event.clientY - rect.top) * height / rect.height
+          };
+          if (points.length >= 2) points = [];
+          points.push(point);
+          draw();
+          if (points.length === 2) {
+            var sourcePoints = points.map(function (item) {
+              return { x: item.x / scale, y: item.y / scale };
+            });
+            var roi = frame.analysis && frame.analysis.roi;
+            var existingBand = frame.localCalibration &&
+              frame.localCalibration.fringeBand;
+            var fringeBand = existingBand || (roi
+              ? {
+                y0: Number(roi.y) / scale,
+                y1: (Number(roi.y) + Number(roi.height)) / scale
+              }
+              : null);
+            var slope = frame.localCalibration &&
+              Number.isFinite(Number(frame.localCalibration.manual &&
+                frame.localCalibration.manual.slopePxPerPx))
+              ? Number(frame.localCalibration.manual.slopePxPerPx)
+              : undefined;
+            if (!finiteNumber(slope) && BP.frameCalibration.estimateLineSlopeAt) {
+              var slopeA = BP.frameCalibration.estimateLineSlopeAt(
+                analysisPixels,
+                width,
+                height,
+                points[0]
+              );
+              var slopeB = BP.frameCalibration.estimateLineSlopeAt(
+                analysisPixels,
+                width,
+                height,
+                points[1]
+              );
+              if (finiteNumber(slopeA) !== null && finiteNumber(slopeB) !== null) {
+                slope = (Number(slopeA) + Number(slopeB)) / 2;
+              }
+            }
+            try {
+              var calibration = BP.frameCalibration.applyManualReticle(
+                sourceWidth,
+                sourceHeight,
+                sourcePoints[0],
+                sourcePoints[1],
+                {
+                  tickSpacingMm: 1,
+                  fringeBand: fringeBand,
+                  slopePxPerPx: slope
+                }
+              );
+              var calibrated = BP.frameCalibration.attachLocalCalibration(
+                frame,
+                calibration
+              );
+              var current = S().getSession(session.id);
+              var nextFrames = (current.frames || []).map(function (item) {
+                return item.id === frame.id
+                  ? Object.assign({}, item, calibrated, {
+                    analysis: Object.assign({}, item.analysis || {}, {
+                      localCalibrationStatus: calibration.status
+                    })
+                  })
+                  : item;
+              });
+              S().updateSession(session.id, { frames: nextFrames });
+              renderAllSessionUI();
+              applySessionData({ silent: true });
+              BP.ui.alert(
+                calibrated.deltaXmm !== null
+                  ? '已人工确认同帧刻线，写入 Δx=' + calibrated.deltaXmm.toFixed(4) + ' mm'
+                  : '已保存人工点选，但刻线间距或状态未通过门限',
+                calibrated.deltaXmm !== null ? 'ok' : 'info'
+              );
+            } catch (error) {
+              fail(error);
+            }
+          }
+        });
+
+        cancel.addEventListener('click', function () {
+          panel.remove();
+        });
+        panel.appendChild(tip);
+        panel.appendChild(canvas);
+        panel.appendChild(cancel);
+        card.appendChild(panel);
+        draw();
+      };
+      image.onerror = function () { fail(new Error('图片解码失败')); };
+      image.src = global.URL.createObjectURL(blob);
+    }).catch(fail);
+  }
+
   function renderAllSessionUI() {
     renderSessions();
     renderRoleOptions();
@@ -289,9 +502,9 @@
 
   /* ---------------- 当前会话数据自动填入 ---------------- */
   var SESSION_FIELD_LABEL = {
-    dxNaPx: '钠光 Δx', dxRefPx: '参考光 Δx', dxNaMm: '无透镜 Δx', dxPrimeMm: '加透镜 Δx′',
-    k: '像素当量 k', d: 'd', D: 'D', lamRef: '参考波长', nNa: 'n_Na',
-    nRef: 'n_ref', dPrime: 'd′', beta: 'β', lambdaNm: '波长 λ'
+    dxNaPx: '钠光 Δx', dxRefPx: '红光待测 Δx', dxNaMm: '无透镜 Δx', dxPrimeMm: '加透镜 Δx′',
+    k: '像素当量 k', d: 'd', D: 'D', lambdaStandardNm: '钠光标准波长',
+    nStandard: 'n_Na', nTarget: 'n_R', dPrime: 'd′', beta: 'β', lambdaNm: '波长 λ'
   };
 
   function mobileCalibratedSession(session) {
@@ -329,7 +542,7 @@
     if (!host) return;
     var keysByMethod = {
       basic: ['dxNaPx', 'k', 'd', 'D', 'lambdaNm'],
-      ratio: ['dxNaPx', 'dxRefPx', 'lamRef', 'nNa', 'nRef', 'lambdaNm'],
+      ratio: ['dxNaPx', 'dxRefPx', 'lambdaStandardNm', 'nStandard', 'nTarget', 'lambdaNm'],
       magnification: ['dxNaMm', 'dxPrimeMm', 'dPrime', 'beta', 'D', 'lambdaNm'],
       trace: ['dxNaPx', 'k', 'd', 'D', 'lambdaNm']
     };
@@ -340,10 +553,11 @@
     ];
     ['sodium', 'reference', 'no_lens', 'with_lens'].forEach(function (role) {
       var stat = data.stats[role];
-      if (!stat || !stat.n) return;
+      if (!stat || (!stat.n && !stat.nEvidence)) return;
       rows.push({
-        label: (S().ROLE_LABEL[role] || role) + '有效帧',
-        value: stat.n + ' 帧' + (Number.isFinite(stat.meanStripeCount)
+        label: (S().ROLE_LABEL[role] || role) + '帧统计',
+        value: stat.n + ' 个正式帧 · ' + stat.nEvidence + ' 个证据帧' +
+          (Number.isFinite(stat.meanStripeCount)
           ? ' · 平均 ' + stat.meanStripeCount.toFixed(1) + ' 条条纹'
           : ''),
         note: stat.qualityStatus === 'reference-only'
@@ -454,6 +668,63 @@
     renderFrameGallery();
   }
 
+  /* 手机照片同样在 1600 px 分析画布上检测同框刻线，坐标与 ROI 一致。 */
+  function readAnalysisPixels(file) {
+    return Promise.resolve().then(function () {
+      if (typeof global.createImageBitmap === 'function') return global.createImageBitmap(file);
+      return new Promise(function (resolve, reject) {
+        var image = new global.Image();
+        image.onload = function () { resolve(image); };
+        image.onerror = function () { reject(new Error('图片解码失败')); };
+        image.src = global.URL.createObjectURL(file);
+      });
+    }).then(function (source) {
+      var sourceWidth = source.width || source.naturalWidth;
+      var sourceHeight = source.height || source.naturalHeight;
+      var scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
+      var width = Math.max(32, Math.round(sourceWidth * scale));
+      var height = Math.max(32, Math.round(sourceHeight * scale));
+      var canvas = doc.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      var context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(source, 0, 0, width, height);
+      return {
+        imageData: context.getImageData(0, 0, width, height),
+        width: width,
+        height: height,
+        scale: scale
+      };
+    });
+  }
+
+  function calibrateCapturedFile(file, fringeResult) {
+    if (!BP.frameCalibration) {
+      return Promise.resolve({
+        calibration: {
+          status: 'rejected',
+          kMmPx: null,
+          lineCount: 0,
+          warnings: ['frame-calibration-module-missing']
+        },
+        geometry: null
+      });
+    }
+    return readAnalysisPixels(file).then(function (px) {
+      return BP.frameCalibration.calibrateSameFrame(
+        px.imageData.data,
+        px.width,
+        px.height,
+        fringeResult,
+        {
+          analysisScale: px.scale,
+          tickSpacingMm: 1,
+          minVisibility: LOW_VISIBILITY
+        }
+      );
+    });
+  }
+
   function addCapturedFile(file) {
     var session = ensureSession();
     syncParamsToSession();
@@ -465,23 +736,37 @@
       ? BP.fringe.analyzeFile(file, { k: kv })
       : Promise.reject(new Error('条纹识别模块未加载'));
     return analysisPromise.then(function (r) {
+      return calibrateCapturedFile(file, r).then(function (local) {
+      var scale = finiteNumber(r.scale) || 1;
+      var sourceDeltaXPx = r.periodPx / scale;
+      var calibrated = BP.frameCalibration
+        ? BP.frameCalibration.attachLocalCalibration({
+          deltaXPx: sourceDeltaXPx,
+          stripeCount: r.stripeCount
+        }, local.calibration)
+        : { deltaXmm: null, calibrationStatus: 'rejected' };
       return S().addFrame(session.id, {
         role: role,
         blob: file,
         name: file.name,
         size: file.size,
-        deltaXPx: r.periodPx,
-        deltaXmm: r.deltaXmm,
+        deltaXPx: sourceDeltaXPx,
+        deltaXmm: calibrated.deltaXmm,
         stripeCount: r.stripeCount,
         quality: r.visibility,
         source: 'photo',
         sourceName: file.name,
+        localCalibration: local.calibration,
+        calibrationStatus: calibrated.calibrationStatus,
+        sourcePixels: r.sourceSize,
         analysis: {
           axis: r.axis,
           visibility: r.visibility,
           periodPxCross: r.periodPxCross,
           stripeAngleDeg: r.stripeAngleDeg,
           roi: r.roi,
+          analysisScale: scale,
+          localCalibrationStatus: calibrated.calibrationStatus,
           signal: r.signal,
           spectralSnr: r.spectralSnr,
           acfPeak: r.acfPeak,
@@ -492,13 +777,16 @@
         var dev = r.axis === 'x'
           ? Math.abs(r.stripeAngleDeg - 90)
           : (r.axis === 'y' ? Math.min(r.stripeAngleDeg, 180 - r.stripeAngleDeg) : NaN);
-        var dxMm = finiteNumber(r.deltaXmm);
+        var dxMm = finiteNumber(calibrated.deltaXmm);
         var visibility = finiteNumber(r.visibility);
-        var mmText = dxMm !== null ? dxMm.toFixed(4) + ' mm' : '未标定 k';
+        var statusText = BP.frameCalibration
+          ? BP.frameCalibration.statusLabel(calibrated.calibrationStatus)
+          : calibrated.calibrationStatus;
+        var mmText = dxMm !== null ? dxMm.toFixed(4) + ' mm' : statusText + '，无正式毫米值';
         var lowVisibility = visibility !== null && visibility < LOW_VISIBILITY;
         showPreview(file,
           '已加入 ' + (S().ROLE_LABEL[role] || role) +
-          ' · Δx=' + r.periodPx.toFixed(2) + ' px ' +
+          ' · Δx=' + sourceDeltaXPx.toFixed(2) + ' px ' +
           '(' + mmText + ')' +
           ' · ' + (r.axis === 'oblique' ? '斜条纹 ' + r.stripeAngleDeg.toFixed(1) + '°'
                                           : '倾角 ' + dev.toFixed(1) + '°') +
@@ -506,6 +794,7 @@
         renderAllSessionUI();
         applySessionData({ silent: true });
         return frame;
+      });
       });
     }).catch(function (e) {
       return S().addFrame(session.id, {
@@ -515,6 +804,8 @@
         size: file.size,
         source: 'photo',
         sourceName: file.name,
+        calibrationStatus: 'rejected',
+        localCalibration: null,
         analysisError: e.message
       }).then(function () {
         showPreview(file, '已保存，但识别失败：' + e.message);
@@ -681,6 +972,31 @@
     opts = opts || {};
     if (!data || !(width > 20) || !(height > 20) || data.length < width * height * 4) {
       return { lines: [], spacingPx: NaN, count: 0, error: '图像数据无效' };
+    }
+    /* 统一委托逐帧标定核心；下方旧算法仅作为核心未加载时的兼容兜底。 */
+    if (BP.frameCalibration && BP.frameCalibration.detectReticleGeometry) {
+      var geometry = BP.frameCalibration.detectReticleGeometry(data, width, height, opts);
+      if (!geometry || geometry.count < 3) {
+        return {
+          lines: [],
+          spacingPx: NaN,
+          count: geometry ? geometry.count : 0,
+          error: geometry && geometry.error ? geometry.error : '自动识别失败',
+          geometry: geometry || null
+        };
+      }
+      return {
+        lines: geometry.lines.map(function (line) { return line.x; }),
+        spacingPx: geometry.spacingPx,
+        count: geometry.count,
+        consistency: geometry.relativeRms,
+        y0: geometry.y0,
+        y1: geometry.y1,
+        width: width,
+        height: height,
+        debug: geometry.debug,
+        geometry: geometry
+      };
     }
 
     var n = width * height;
@@ -1096,12 +1412,12 @@
         {
           label: '相邻刻线实际间距 L',
           value: F.mm(L) + ' mm',
-          cls: LSource === '手动输入' ? '' : 'is-warn'
+          cls: LSource === '待核实输入' ? 'is-warn' : ''
         },
         {
           label: 'L 来源',
           value: LSource,
-          cls: LSource === '手动输入' ? '' : 'is-warn'
+          cls: LSource === '待核实输入' ? 'is-warn' : ''
         },
         { label: '标定方式', value: source },
         { label: 'k = L / N', value: F.sci(r.k) + ' mm/px', cls: 'is-key' }
@@ -1110,12 +1426,12 @@
     } catch (e) { fail(e); }
   }
 
-  /* 默认 L=5 mm 只来自报告参数，用户未改时必须保留待核实标记。 */
+  /* 相邻刻线 1.00 mm 已由实验者确认；后续手动改动仍单独保留来源。 */
   function reticleLSource() {
     var field = $('retL');
-    return field && field.dataset.userEdited === '1'
-      ? '手动输入'
-      : '报告预设，待核实';
+    if (field && field.dataset.userEdited === '1') return '手动输入';
+    var L = num('retL');
+    return Math.abs(L - 1) < 0.005 ? '人工确认 1.00 mm' : '待核实输入';
   }
 
   /* ---------------- 波长表 ---------------- */
@@ -1273,8 +1589,12 @@
       k: k && isFinite(k.value) ? { value: k.value, L: k.L, N: k.N, source: k.source } : null,
       frames: frames,
       params: {
-        a: null, A: 1.0, nNa: REPORT.nNa, nRef: REPORT.nRef,
-        D: num('param_D', REPORT.D), d: num('param_d', REPORT.d), b: 0.08, lamRef: 650
+        a: null, A: 1.0,
+        lambdaStandardNm: REPORT.lambdaStandardNm,
+        nStandard: REPORT.nStandard,
+        nTarget: REPORT.nTarget,
+        D: num('param_D', REPORT.D), d: num('param_d', REPORT.d), b: 0.08,
+        nominalTargetNm: 650
       }
     };
   }

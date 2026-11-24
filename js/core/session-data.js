@@ -21,6 +21,12 @@
     magnification: '横向放大率法',
     trace: '光线追迹法'
   };
+  var ROLE_LABEL = {
+    sodium: '钠光标准条纹',
+    reference: '红光待测条纹',
+    no_lens: '无透镜条纹',
+    with_lens: '加透镜条纹'
+  };
 
   function finite(value) {
     return value !== null && value !== '' && isFinite(value);
@@ -49,14 +55,41 @@
       uA: sigma === null ? null : sigma / Math.sqrt(values.length)
     };
   }
-  function sourceForRole(label, n, meanStripeCount, qualityStatus) {
-    if (!n) return null;
+  function frameStatus(frame) {
+    if (global.BP && global.BP.frameCalibration &&
+        typeof global.BP.frameCalibration.calibrationStatus === 'function') {
+      return global.BP.frameCalibration.calibrationStatus(frame);
+    }
+    if (frame && frame.localCalibration && frame.localCalibration.status) {
+      return frame.localCalibration.status;
+    }
+    return frame && frame.calibrationStatus ? frame.calibrationStatus : 'legacyGlobalK';
+  }
+  function isFormalFrame(frame) {
+    var status = frameStatus(frame);
+    var referenceOnly = !!(frame && frame.selection &&
+      frame.selection.referenceOnly === true);
+    return !!frame &&
+      frame.excluded !== true &&
+      !referenceOnly &&
+      (status === 'autoAccepted' || status === 'manualAccepted') &&
+      numberOrNull(frame.deltaXmm) !== null &&
+      Number(frame.deltaXmm) > 0;
+  }
+  function sourceForRole(label, data, unit) {
+    var count = data && (unit === 'mm' ? data.nMm : data.nPx);
+    if (!count) return null;
     // 旧会话可能没有条纹数；严格数值判断可避免把 null 误显示成 0.0 条。
-    var stripes = Number.isFinite(meanStripeCount)
-      ? '，平均 ' + Number(meanStripeCount).toFixed(1) + ' 条条纹'
+    var stripes = Number.isFinite(data.meanStripeCount)
+      ? '，平均 ' + Number(data.meanStripeCount).toFixed(1) + ' 条条纹'
       : '';
-    var quality = qualityStatus === 'reference-only' ? '，波动偏大，仅参考' : '';
-    return SOURCE.auto + '（' + label + '，' + n + ' 帧均值' + stripes + quality + '）';
+    var quality = data.qualityStatus === 'reference-only' ? '，波动偏大，仅参考' : '';
+    var value = unit === 'mm'
+      ? '，毫米值来自逐帧同框标定'
+      : '，像素值来自真实识别证据帧';
+    return SOURCE.auto + '（' + label + '，' + count +
+      (unit === 'mm' ? ' 个正式帧' : ' 个像素证据帧') +
+      value + stripes + quality + '）';
   }
   function missing(list, key, label, reason) {
     list.push({ key: key, label: label, reason: reason });
@@ -81,17 +114,17 @@
     // 旧记录若没有逐项来源，不能把数值推定成实测或会话继承。
     return value || fallback || SOURCE.unknown;
   }
-  function calibration(session, options) {
-    var c = session && session.calibration;
-    var v = c ? numberOrNull(c.k_mm_px) : null;
-    if (v !== null && v > 0) return v;
-    v = options ? numberOrNull(options.k) : null;
-    return v !== null && v > 0 ? v : null;
-  }
-  function calibrationDetail(session) {
-    var c = session && session.calibration;
-    if (!c || !finite(c.k_mm_px)) return '';
-    return c.L_source ? 'L 来源：' + c.L_source : '';
+  function calibrationDetail(data) {
+    if (!data || !(data.meanKMmPx > 0)) return '';
+    var range = finite(data.kMinMmPx) && finite(data.kMaxMmPx)
+      ? '，范围 ' + data.kMinMmPx.toPrecision(5) + '–' +
+        data.kMaxMmPx.toPrecision(5) + ' mm/px'
+      : '';
+    return '逐帧同框刻线：k 均值 ' + data.meanKMmPx.toPrecision(6) +
+      ' mm/px' + range + '；刻线数 ' +
+      (finite(data.meanLineCount) ? data.meanLineCount.toFixed(1) : '—') +
+      '，最大相对残差 ' +
+      (finite(data.maxRelativeRms) ? data.maxRelativeRms.toPrecision(3) : '—');
   }
   function roleFrameList(session, role) {
     var all = session && session.frames ? session.frames : [];
@@ -99,29 +132,48 @@
       return frame && frame.role === role && !frame.excluded;
     });
   }
-  function roleData(session, role, k) {
-    var frames = roleFrameList(session, role);
+  function roleData(session, role) {
+    var evidenceFrames = roleFrameList(session, role);
+    var frames = evidenceFrames.filter(isFormalFrame);
     var px = [];
     var mm = [];
     var stripes = [];
-    frames.forEach(function (frame) {
+    var kValues = [];
+    var lineCounts = [];
+    var relativeRms = [];
+    evidenceFrames.forEach(function (frame) {
       var dxPx = numberOrNull(frame.deltaXPx);
-      var dxMm = numberOrNull(frame.deltaXmm);
-      if (dxPx !== null) px.push(dxPx);
-      if (dxMm === null && dxPx !== null && k > 0) dxMm = dxPx * k;
-      if (dxMm !== null) mm.push(dxMm);
+      if (dxPx !== null && dxPx > 0) px.push(dxPx);
       var stripeCount = numberOrNull(frame.stripeCount);
       if (stripeCount !== null && stripeCount > 0) stripes.push(stripeCount);
     });
+    frames.forEach(function (frame) {
+      var dxMm = numberOrNull(frame.deltaXmm);
+      if (dxMm !== null) mm.push(dxMm);
+      var local = frame.localCalibration;
+      var kValue = local ? numberOrNull(local.kMmPx) : null;
+      if (kValue !== null && kValue > 0) kValues.push(kValue);
+      var lineCount = local ? numberOrNull(local.lineCount) : null;
+      if (lineCount !== null && lineCount > 0) lineCounts.push(lineCount);
+      var rms = local ? numberOrNull(local.relativeRms) : null;
+      if (rms !== null && rms >= 0) relativeRms.push(rms);
+    });
     var pxStats = sampleStats(px);
     var mmStats = sampleStats(mm);
-    var referenceOnly = frames.some(function (frame) {
+    var referenceOnly = evidenceFrames.some(function (frame) {
       return frame.selection && frame.selection.referenceOnly === true;
     });
+    var statusCounts = evidenceFrames.reduce(function (counts, frame) {
+      var status = frameStatus(frame);
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {});
     return {
       role: role,
+      label: ROLE_LABEL[role] || role,
       frames: frames,
-      n: Math.max(px.length, mm.length),
+      n: frames.length,
+      nEvidence: evidenceFrames.length,
       nPx: px.length,
       nMm: mm.length,
       meanPx: pxStats.mean,
@@ -129,19 +181,40 @@
       meanMm: mmStats.mean,
       sdMm: mmStats.sd,
       meanStripeCount: mean(stripes),
+      meanKMmPx: mean(kValues),
+      kMinMmPx: kValues.length ? Math.min.apply(null, kValues) : null,
+      kMaxMmPx: kValues.length ? Math.max.apply(null, kValues) : null,
+      meanLineCount: mean(lineCounts),
+      maxRelativeRms: relativeRms.length ? Math.max.apply(null, relativeRms) : null,
+      autoAccepted: statusCounts.autoAccepted || 0,
+      manualAccepted: statusCounts.manualAccepted || 0,
+      pending: statusCounts.pending || 0,
+      rejected: statusCounts.rejected || 0,
+      legacyGlobalK: statusCounts.legacyGlobalK || 0,
       qualityStatus: referenceOnly ? 'reference-only' : 'standard'
     };
   }
-  function roleSource(result, role, label, data, unit) {
-    if (!data.n) {
-      missing(result.missing, unit, label, '缺少“' + label + '”的有效识别帧');
-      result.values[unit] = null;
+  function roleSource(result, role, label, data, pixelKey, mmKey) {
+    if (!data.nMm) {
+      missing(result.missing, mmKey, label + '毫米值',
+        '缺少“' + label + '”的人工/自动确认同帧标定帧');
+      result.values[mmKey] = null;
+      if (data.nPx) {
+        result.values[pixelKey] = data.meanPx;
+        result.sources[pixelKey] = SOURCE.auto;
+        result.sourceDetails[pixelKey] = sourceForRole(label, data, 'px') +
+          '；无正式同帧标定，不能换算毫米值';
+      } else {
+        result.values[pixelKey] = null;
+      }
       return;
     }
-    result.sources[unit] = SOURCE.auto;
-    result.sourceDetails[unit] = sourceForRole(
-      label, data.n, data.meanStripeCount, data.qualityStatus
-    );
+    result.values[pixelKey] = data.meanPx;
+    result.values[mmKey] = data.meanMm;
+    result.sources[pixelKey] = SOURCE.auto;
+    result.sources[mmKey] = SOURCE.calibration;
+    result.sourceDetails[pixelKey] = sourceForRole(label, data, 'px');
+    result.sourceDetails[mmKey] = sourceForRole(label, data, 'mm');
   }
   function lambdaStats(primary, fn) {
     var values = [];
@@ -169,23 +242,22 @@
   }
 
   function basic(session, result, options) {
-    var k = calibration(session, options);
-    var sodium = roleData(session, 'sodium', k);
-    roleSource(result, 'sodium', '钠光条纹', sodium, 'dxNaPx');
-    if (sodium.meanPx !== null) result.values.dxNaPx = sodium.meanPx;
-    var kValue = put(result, 'k', k, '像素当量 k', SOURCE.calibration);
-    if (kValue !== null) result.sourceDetails.k = calibrationDetail(session);
+    var sodium = roleData(session, 'sodium');
+    roleSource(result, 'sodium', '钠光条纹', sodium, 'dxNaPx', 'dxNaMm');
+    var kValue = put(result, 'k', sodium.meanKMmPx, '像素当量 k', SOURCE.calibration);
+    if (kValue !== null) result.sourceDetails.k = calibrationDetail(sodium);
     var d = put(result, 'd', param(session, 'd'), '虚光源间距 d',
       paramSource(session, 'd'));
     var D = put(result, 'D', param(session, 'D'), '观察距离 D',
       paramSource(session, 'D'));
     result.stats.sodium = sodium;
 
-    if (sodium.meanPx !== null && k !== null && d !== null && D !== null && global.BP.physics) {
-      var lam = global.BP.physics.wavelengthBasic({ d: d, D: D, dxPx: sodium.meanPx, k: k });
+    if (sodium.meanMm !== null && d !== null && D !== null && global.BP.physics) {
+      // 毫米值已经由每帧自己的 k_i 得到，这里令 k=1，避免再次乘会话全局值。
+      var lam = global.BP.physics.wavelengthBasic({ d: d, D: D, dxPx: sodium.meanMm, k: 1 });
       var frameLam = lambdaStats(sodium, function (frame) {
         return global.BP.physics.wavelengthBasic({
-          d: d, D: D, dxPx: frame.deltaXPx, k: k
+          d: d, D: D, dxPx: frame.deltaXmm, k: 1
         }).value;
       });
       setLambda(result, lam.value, frameLam);
@@ -195,32 +267,42 @@
   }
 
   function ratio(session, result, options) {
-    var k = calibration(session, options);
-    var sodium = roleData(session, 'sodium', k);
-    var reference = roleData(session, 'reference', k);
-    roleSource(result, 'sodium', '钠光条纹', sodium, 'dxNaPx');
-    roleSource(result, 'reference', '激光参考条纹', reference, 'dxRefPx');
-    if (sodium.meanPx !== null) result.values.dxNaPx = sodium.meanPx;
-    if (reference.meanPx !== null) result.values.dxRefPx = reference.meanPx;
-    var lamRef = put(result, 'lamRef', param(session, 'lamRef'), '参考光波长',
-      paramSource(session, 'lamRef'));
-    var nNa = put(result, 'nNa', param(session, 'nNa'), '钠光折射率',
-      paramSource(session, 'nNa'));
-    var nRef = put(result, 'nRef', param(session, 'nRef'), '参考光折射率',
-      paramSource(session, 'nRef'));
+    var sodium = roleData(session, 'sodium');
+    var reference = roleData(session, 'reference');
+    roleSource(result, 'sodium', '钠光标准条纹', sodium, 'dxNaPx', 'dxNaMm');
+    roleSource(result, 'reference', '红光待测条纹', reference, 'dxRefPx', 'dxRefMm');
+    /*
+     * 只读取新方向的语义化参数。旧会话若仍保存 lamRef/nNa/nRef，
+     * 这里会明确显示缺项，避免把“参考激光反算钠光”的旧方向静默反转。
+     */
+    var lambdaStandardNm = put(result, 'lambdaStandardNm',
+      param(session, 'lambdaStandardNm'), '钠光标准波长',
+      paramSource(session, 'lambdaStandardNm'));
+    var nStandard = put(result, 'nStandard', param(session, 'nStandard'),
+      '钠光折射率（N-BK7 假设）', paramSource(session, 'nStandard'));
+    var nTarget = put(result, 'nTarget', param(session, 'nTarget'),
+      '红光折射率（N-BK7 假设）', paramSource(session, 'nTarget'));
     result.stats.sodium = sodium;
     result.stats.reference = reference;
 
-    if (sodium.meanPx !== null && reference.meanPx !== null &&
-        lamRef !== null && nNa !== null && nRef !== null && global.BP.physics) {
+    if (sodium.meanMm !== null && reference.meanMm !== null &&
+        lambdaStandardNm !== null && nStandard !== null && nTarget !== null &&
+        global.BP.physics) {
       var lam = global.BP.physics.wavelengthRatio({
-        dxNaPx: sodium.meanPx, dxRefPx: reference.meanPx,
-        lamRef: lamRef, nNa: nNa, nRef: nRef
+        // 比值法的长度单位相消；两角色都使用同帧标定后的毫米值。
+        deltaXStandardPx: sodium.meanMm,
+        deltaXTargetPx: reference.meanMm,
+        lambdaStandardNm: lambdaStandardNm,
+        nStandard: nStandard,
+        nTarget: nTarget
       });
       var frameLam = lambdaStats(sodium, function (frame) {
         return global.BP.physics.wavelengthRatio({
-          dxNaPx: frame.deltaXPx, dxRefPx: reference.meanPx,
-          lamRef: lamRef, nNa: nNa, nRef: nRef
+          deltaXStandardPx: frame.deltaXmm,
+          deltaXTargetPx: reference.meanMm,
+          lambdaStandardNm: lambdaStandardNm,
+          nStandard: nStandard,
+          nTarget: nTarget
         }).value;
       });
       setLambda(result, lam.value, frameLam);
@@ -230,11 +312,10 @@
   }
 
   function magnification(session, result, options) {
-    var k = calibration(session, options);
-    var noLens = roleData(session, 'no_lens', k);
-    var withLens = roleData(session, 'with_lens', k);
-    roleSource(result, 'no_lens', '无透镜条纹', noLens, 'dxNaMm');
-    roleSource(result, 'with_lens', '加透镜条纹', withLens, 'dxPrimeMm');
+    var noLens = roleData(session, 'no_lens');
+    var withLens = roleData(session, 'with_lens');
+    roleSource(result, 'no_lens', '无透镜条纹', noLens, 'dxNaPx', 'dxNaMm');
+    roleSource(result, 'with_lens', '加透镜条纹', withLens, 'dxPrimePx', 'dxPrimeMm');
     if (noLens.meanMm !== null) result.values.dxNaMm = noLens.meanMm;
     if (withLens.meanMm !== null) result.values.dxPrimeMm = withLens.meanMm;
     var dPrime = put(result, 'dPrime', param(session, 'dPrime'), '像间距 d′',
@@ -253,9 +334,8 @@
         D: D, dxPrimeMm: withLens.meanMm
       });
       var frameLam = lambdaStats(noLens, function (frame) {
-        var dxMm = finite(frame.deltaXmm) ? Number(frame.deltaXmm) : Number(frame.deltaXPx) * k;
         return global.BP.physics.wavelengthMagnification({
-          dPrime: dPrime, beta: beta, dxNaMm: dxMm,
+          dPrime: dPrime, beta: beta, dxNaMm: frame.deltaXmm,
           D: D, dxPrimeMm: withLens.meanMm
         }).value;
       });
@@ -266,12 +346,10 @@
   }
 
   function trace(session, result, options) {
-    var k = calibration(session, options);
-    var sodium = roleData(session, 'sodium', k);
-    roleSource(result, 'sodium', '钠光条纹', sodium, 'dxNaPx');
-    if (sodium.meanPx !== null) result.values.dxNaPx = sodium.meanPx;
-    var kValue = put(result, 'k', k, '像素当量 k', SOURCE.calibration);
-    if (kValue !== null) result.sourceDetails.k = calibrationDetail(session);
+    var sodium = roleData(session, 'sodium');
+    roleSource(result, 'sodium', '钠光条纹', sodium, 'dxNaPx', 'dxNaMm');
+    var kValue = put(result, 'k', sodium.meanKMmPx, '像素当量 k', SOURCE.calibration);
+    if (kValue !== null) result.sourceDetails.k = calibrationDetail(sodium);
     var preset = session && session.trace ? session.trace :
       (global.BP.sessions ? global.BP.sessions.TRACE_PRESET : null);
     var d = put(result, 'd', preset ? preset.d_mm : null, '追迹 d', SOURCE.trace);
@@ -281,11 +359,13 @@
       '观察距离 D', DValue !== null ? paramSource(session, 'D') : SOURCE.trace);
     result.stats.sodium = sodium;
 
-    if (sodium.meanPx !== null && k !== null && d !== null && D !== null && global.BP.physics) {
-      var lam = global.BP.physics.wavelengthBasic({ d: d, D: D, dxPx: sodium.meanPx, k: k });
+    if (sodium.meanMm !== null && d !== null && D !== null && global.BP.physics) {
+      var lam = global.BP.physics.wavelengthBasic({
+        d: d, D: D, dxPx: sodium.meanMm, k: 1
+      });
       var frameLam = lambdaStats(sodium, function (frame) {
         return global.BP.physics.wavelengthBasic({
-          d: d, D: D, dxPx: frame.deltaXPx, k: k
+          d: d, D: D, dxPx: frame.deltaXmm, k: 1
         }).value;
       });
       setLambda(result, lam.value, frameLam);

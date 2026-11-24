@@ -11,7 +11,7 @@
     : (typeof require === 'function' ? require('./report-errors.js') : null);
 
   var SOURCE_TYPES = [
-    'measured', 'reportPreset', 'modelTrace', 'manual', 'referenceOnly', 'missing'
+    'measured', 'reportPreset', 'modelTrace', 'manual', 'referenceOnly', 'nominal', 'missing'
   ];
 
   var REPORT_PRESET = {
@@ -75,7 +75,7 @@
 
   var ROLE_LABEL = {
     sodium: '钠光条纹',
-    reference: '红光参考条纹',
+    reference: '红光待测条纹',
     no_lens: '无透镜条纹',
     with_lens: '加透镜条纹',
     calibration: '标定图'
@@ -219,51 +219,121 @@
     return frames;
   }
 
-  function roleStats(frames) {
-    var values = frames.map(function (frame) { return numberOrNull(frame.deltaXPx); })
-      .filter(function (value) { return value !== null && value > 0; });
-    var stripes = frames.map(function (frame) { return numberOrNull(frame.stripeCount); })
-      .filter(function (value) { return value !== null && value > 0; });
-    var stats = Errors.sampleStats(values);
-    var referenceOnly = frames.some(function (frame) {
-      return frame.selection && frame.selection.referenceOnly === true;
+  function frameStatus(frame) {
+    if (global.BP && global.BP.frameCalibration &&
+        typeof global.BP.frameCalibration.calibrationStatus === 'function') {
+      return global.BP.frameCalibration.calibrationStatus(frame);
+    }
+    if (frame && frame.localCalibration && frame.localCalibration.status) {
+      return frame.localCalibration.status;
+    }
+    return frame && frame.calibrationStatus ? frame.calibrationStatus : 'legacyGlobalK';
+  }
+
+  function formalFrame(frame) {
+    var status = frameStatus(frame);
+    var deltaXmm = numberOrNull(frame && frame.deltaXmm);
+    var referenceOnly = !!(frame && frame.selection &&
+      frame.selection.referenceOnly === true);
+    return !!frame &&
+      frame.excluded !== true &&
+      !referenceOnly &&
+      (status === 'autoAccepted' || status === 'manualAccepted') &&
+      deltaXmm !== null &&
+      deltaXmm > 0;
+  }
+
+  function calibrationSummary(frames) {
+    var kValues = [];
+    var lineCounts = [];
+    var residuals = [];
+    frames.forEach(function (frame) {
+      var local = frame && frame.localCalibration;
+      var k = numberOrNull(local && local.kMmPx);
+      var lineCount = numberOrNull(local && local.lineCount);
+      var residual = numberOrNull(local && local.relativeRms);
+      if (k !== null && k > 0) kValues.push(k);
+      if (lineCount !== null && lineCount > 0) lineCounts.push(lineCount);
+      if (residual !== null && residual >= 0) residuals.push(residual);
     });
     return {
-      n: stats.n,
-      meanPx: stats.mean,
-      sdPx: stats.sd,
-      uAPx: stats.uA,
-      cv: stats.cv,
+      nK: kValues.length,
+      meanKMmPx: mean(kValues),
+      kMinMmPx: kValues.length ? Math.min.apply(null, kValues) : null,
+      kMaxMmPx: kValues.length ? Math.max.apply(null, kValues) : null,
+      meanLineCount: mean(lineCounts),
+      maxRelativeRms: residuals.length ? Math.max.apply(null, residuals) : null
+    };
+  }
+
+  function roleStats(evidenceFrames) {
+    var frames = (evidenceFrames || []).filter(formalFrame);
+    var mmValues = frames.map(function (frame) { return numberOrNull(frame.deltaXmm); })
+      .filter(function (value) { return value !== null && value > 0; });
+    // 像素间距与条纹数来自真实识别证据帧；毫米值仍只取确认过的正式帧。
+    var pxValues = (evidenceFrames || []).map(function (frame) {
+      return numberOrNull(frame.deltaXPx);
+    })
+      .filter(function (value) { return value !== null && value > 0; });
+    var stripes = (evidenceFrames || []).map(function (frame) {
+      return numberOrNull(frame.stripeCount);
+    })
+      .filter(function (value) { return value !== null && value > 0; });
+    var mmStats = Errors.sampleStats(mmValues);
+    var pxStats = Errors.sampleStats(pxValues);
+    var calibration = calibrationSummary(frames);
+    var referenceOnly = (evidenceFrames || []).some(function (frame) {
+      return frame.selection && frame.selection.referenceOnly === true;
+    });
+    var statusCounts = (evidenceFrames || []).reduce(function (counts, frame) {
+      var status = frameStatus(frame);
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {});
+    return {
+      n: mmStats.n,
+      nEvidence: (evidenceFrames || []).length,
+      nPx: pxStats.n,
+      nMm: mmStats.n,
+      meanMm: mmStats.mean,
+      sdMm: mmStats.sd,
+      uAMm: mmStats.uA,
+      cv: mmStats.mean && mmStats.sd !== null ? mmStats.sd / mmStats.mean : null,
+      meanPx: pxStats.mean,
+      sdPx: pxStats.sd,
+      uAPx: pxStats.uA,
+      cvPx: pxStats.mean && pxStats.sd !== null ? pxStats.sd / pxStats.mean : null,
       meanStripeCount: mean(stripes),
+      meanKMmPx: calibration.meanKMmPx,
+      kMinMmPx: calibration.kMinMmPx,
+      kMaxMmPx: calibration.kMaxMmPx,
+      nK: calibration.nK,
+      meanLineCount: calibration.meanLineCount,
+      maxRelativeRms: calibration.maxRelativeRms,
+      autoAccepted: statusCounts.autoAccepted || 0,
+      manualAccepted: statusCounts.manualAccepted || 0,
+      pending: statusCounts.pending || 0,
+      rejected: statusCounts.rejected || 0,
+      legacyGlobalK: statusCounts.legacyGlobalK || 0,
       referenceOnly: referenceOnly,
-      sourceType: stats.n ? (referenceOnly ? 'referenceOnly' : 'measured') : 'missing',
-      frames: frames.map(function (frame) {
+      sourceType: referenceOnly ? 'referenceOnly' : (mmStats.n ? 'measured' : 'missing'),
+      frames: (evidenceFrames || []).map(function (frame) {
         return {
           id: frame.id || null,
           sessionId: frame.sessionId || null,
           deltaXPx: numberOrNull(frame.deltaXPx),
+          deltaXmm: numberOrNull(frame.deltaXmm),
           stripeCount: numberOrNull(frame.stripeCount),
           source: frame.source || '',
           sourceName: frame.sourceName || '',
           capturedAt: numberOrNull(frame.capturedAt),
           qualityScore: numberOrNull(frame.qualityScore),
-          referenceOnly: !!(frame.selection && frame.selection.referenceOnly)
+          referenceOnly: !!(frame.selection && frame.selection.referenceOnly),
+          calibrationStatus: frameStatus(frame),
+          localCalibration: frame.localCalibration || null
         };
       })
     };
-  }
-
-  function sessionCalibration(sessions) {
-    var found = null;
-    (sessions || []).some(function (session) {
-      var calibration = session && session.calibration;
-      if (calibration && finite(calibration.k_mm_px) && Number(calibration.k_mm_px) > 0) {
-        found = calibration;
-        return true;
-      }
-      return false;
-    });
-    return found;
   }
 
   function sessionParam(sessions, key) {
@@ -276,6 +346,38 @@
       return false;
     });
     return value;
+  }
+
+  function sessionParamSource(sessions, key) {
+    var source = null;
+    (sessions || []).some(function (session) {
+      var sources = session && session.paramsSources;
+      if (sources && sources[key]) {
+        source = String(sources[key]);
+        return true;
+      }
+      return false;
+    });
+    return source;
+  }
+
+  function sourceTypeForParam(source) {
+    if (!source) return 'missing';
+    if (/预设/.test(source)) return 'reportPreset';
+    if (/实测|测量|输入/.test(source)) return 'measured';
+    return 'manual';
+  }
+
+  function methodParam(sessions, key, presetValue, allowPreset) {
+    var value = sessionParam(sessions, key);
+    var source = sessionParamSource(sessions, key);
+    var sourceType = sourceTypeForParam(source);
+    if (value === null && allowPreset && finite(presetValue)) {
+      value = Number(presetValue);
+      sourceType = 'reportPreset';
+      source = '研究报告条件参数';
+    }
+    return { value: value, source: source || '', sourceType: sourceType };
   }
 
   function provenance(field, value, sourceType, sourceDetail) {
@@ -291,10 +393,28 @@
     return { role: role, reason: reason };
   }
 
-  function buildRatio(stats, sessions, warnings) {
+  function buildRatio(stats, sessions, warnings, options) {
+    options = options || {};
     var missingItems = [];
-    if (!stats.sodium.n) missingItems.push(missing('sodium', '缺少钠光条纹有效帧'));
-    if (!stats.reference.n) missingItems.push(missing('reference', '缺少红光参考条纹有效帧'));
+    if (!stats.sodium.nMm) {
+      missingItems.push(missing('sodium', '缺少钠光逐帧同框标定后的正式帧'));
+    }
+    if (!stats.reference.nMm) {
+      missingItems.push(missing('reference', '缺少红光待测逐帧同框标定后的正式帧'));
+    }
+    if (!stats.sodium.nMm || !stats.reference.nMm) {
+      missingItems.push(missing('calibration', '正式比值法要求两段角色都使用各自帧内的刻线像素当量'));
+    }
+    /* 钠光标准值来自报告预设（589.3 nm 为国际公认标准波长，不作实测）。
+     * 红光折射率与钠光折射率都来自 N-BK7 假设，必须在来源审计里标注。
+     */
+    var lamStd = methodParam(sessions, 'lambdaStandardNm', REPORT_PRESET.standardNm,
+      options.allowReportPreset);
+    var nStd = methodParam(sessions, 'nStandard', REPORT_PRESET.nNa, options.allowReportPreset);
+    var nTgt = methodParam(sessions, 'nTarget', REPORT_PRESET.nRef, options.allowReportPreset);
+    if (lamStd.value === null) missingItems.push(missing('lambdaStandardNm', '缺少钠光标准波长'));
+    if (nStd.value === null) missingItems.push(missing('nStandard', '缺少钠光折射率（N-BK7 假设）'));
+    if (nTgt.value === null) missingItems.push(missing('nTarget', '缺少红光折射率（N-BK7 假设）'));
     if (missingItems.length) {
       return {
         valueNm: null,
@@ -303,30 +423,38 @@
         sourceType: 'missing',
         missing: missingItems,
         sourceItems: [],
-        formula: 'λ_Na = λ_ref·(Δx_Na/Δx_ref)·((n_Na−1)/(n_ref−1))'
+        kStats: calibrationSummary(stats.sodium.frames),
+        formula: 'λ_R = λ_Na·(Δx_R/Δx_Na)·((n_R−1)/(n_Na−1))'
       };
     }
 
-    var lamRef = sessionParam(sessions, 'lamRef');
-    var nNa = sessionParam(sessions, 'nNa');
-    var nRef = sessionParam(sessions, 'nRef');
-    var conditional = lamRef === null || nNa === null || nRef === null;
-    lamRef = lamRef === null ? REPORT_PRESET.lamRef_nm : lamRef;
-    nNa = nNa === null ? REPORT_PRESET.nNa : nNa;
-    nRef = nRef === null ? REPORT_PRESET.nRef : nRef;
+    var conditional = lamStd.sourceType === 'reportPreset' ||
+      nStd.sourceType === 'reportPreset' ||
+      nTgt.sourceType === 'reportPreset';
 
     var result = Errors.ratioConditional({
-      sodium: stats.sodium,
-      reference: stats.reference,
-      lamRef: lamRef,
-      nNa: nNa,
-      nRef: nRef,
-      standardNm: REPORT_PRESET.standardNm,
+      standard: {
+        mean: stats.sodium.meanMm,
+        sd: stats.sodium.sdMm,
+        n: stats.sodium.nMm
+      },
+      target: {
+        mean: stats.reference.meanMm,
+        sd: stats.reference.sdMm,
+        n: stats.reference.nMm
+      },
+      lambdaStandardNm: lamStd.value,
+      nStandard: nStd.value,
+      nTarget: nTgt.value,
+      nominalTargetNm: REPORT_PRESET.lamRef_nm,
       conditional: conditional,
       referenceOnly: stats.reference.referenceOnly
     });
     if (stats.reference.referenceOnly) {
-      warnings.push('红光参考仅 ' + stats.reference.n + ' 个有效帧且波动偏大，比值法只能作参考性条件计算。');
+      warnings.push('红光待测条纹有 ' + stats.reference.nEvidence +
+        ' 个像素证据帧，但正式毫米帧为 ' + stats.reference.nMm +
+        '；未人工确认同帧刻线前，比值法只能作参考性条件计算。旧记录的 referenceOnly 标签不会自动改写，' +
+        '重新导入时需明确选择“红光待测”。');
     }
     return {
       valueNm: result.valueNm,
@@ -337,16 +465,39 @@
       conditional: conditional,
       referenceOnly: stats.reference.referenceOnly,
       accuracy: result.accuracy,
+      /* 五步 A 类预算：只含条纹间距重复性，B 类项标未定量。 */
+      uncertainty: (function () {
+        try {
+          return Errors.ratioTypeABudget({
+            standard: { mean: stats.sodium.meanMm, sd: stats.sodium.sdMm, n: stats.sodium.nMm },
+            target: { mean: stats.reference.meanMm, sd: stats.reference.sdMm, n: stats.reference.nMm },
+            lambdaStandardNm: lamStd.value,
+            nStandard: nStd.value,
+            nTarget: nTgt.value,
+            nominalTargetNm: REPORT_PRESET.lamRef_nm
+          });
+        } catch (err) {
+          return null;
+        }
+      })(),
+      accuracyBasis: result.accuracyBasis,
       terms: result.terms,
       sourceItems: [
-        provenance('Δx_Na', stats.sodium.meanPx, 'measured',
-          '当前导入会话 sodium 角色 ' + stats.sodium.n + ' 帧均值'),
-        provenance('Δx_ref', stats.reference.meanPx, stats.reference.referenceOnly ? 'referenceOnly' : 'measured',
-          '当前导入会话 reference 角色 ' + stats.reference.n + ' 帧均值'),
-        provenance('λ_ref', lamRef, conditional ? 'reportPreset' : 'manual', '参考波长输入'),
-        provenance('n_Na', nNa, conditional ? 'reportPreset' : 'manual', '钠光折射率'),
-        provenance('n_ref', nRef, conditional ? 'reportPreset' : 'manual', '参考光折射率')
+        provenance('Δx_Na', stats.sodium.meanMm, 'measured',
+          'sodium 角色 ' + stats.sodium.nMm + ' 个正式帧的逐帧 k_i 毫米均值'),
+        provenance('Δx_R', stats.reference.meanMm,
+          stats.reference.referenceOnly ? 'referenceOnly' : 'measured',
+          'reference 角色（红光待测）' + stats.reference.nMm + ' 个正式帧的逐帧 k_i 毫米均值'),
+        provenance('λ_Na', lamStd.value, lamStd.sourceType,
+          lamStd.source || '钠光标准值 589.3 nm（标准，不作实测）'),
+        provenance('n_Na', nStd.value, nStd.sourceType,
+          nStd.source || '钠光折射率（N-BK7 假设）'),
+        provenance('n_R', nTgt.value, nTgt.sourceType,
+          nTgt.source || '红光折射率（N-BK7 假设）'),
+        provenance('650 nm', REPORT_PRESET.lamRef_nm, 'nominal',
+          '激光器标称值，仅用于偏差比较，不作为已校准真值')
       ],
+      kStats: calibrationSummary(stats.sodium.frames),
       formula: result.formula
     };
   }
@@ -366,15 +517,10 @@
   function buildTrace(stats, sessions, warnings, geometry, options) {
     options = options || {};
     var missingItems = [];
-    if (!stats.sodium.n) missingItems.push(missing('sodium', '缺少钠光条纹有效帧'));
-    var cal = sessionCalibration(sessions);
-    var k = cal ? numberOrNull(cal.k_mm_px) : null;
-    var kSourceType = cal ? 'manual' : 'missing';
-    if (!(k > 0) && options.allowReportPreset) {
-      k = REPORT_PRESET.k_mm_px;
-      kSourceType = 'reportPreset';
+    if (!stats.sodium.nMm) {
+      missingItems.push(missing('sodium', '缺少钠光逐帧同框标定后的正式帧'));
+      missingItems.push(missing('calibration', '缺少与条纹同框的逐帧刻线像素当量'));
     }
-    if (!(k > 0)) missingItems.push(missing('calibration', '缺少有效像素当量 k'));
     var trace = tracePreset(sessions);
     var d = trace ? numberOrNull(trace.d_mm) : (geometry ? geometry.stats.dMm : null);
     var D = sessionParam(sessions, 'D');
@@ -389,16 +535,17 @@
         missing: missingItems,
         dTraceMm: d,
         DMm: D,
+        kStats: calibrationSummary(stats.sodium.frames),
         formula: 'λ = d_trace·Δx·k / D',
-        note: '追迹法需要钠光 Δx、可信 k 与 D；缺失项不会用零补齐。'
+        note: '正式追迹法需要钠光逐帧毫米值、可信 d 与 D；不会用全局 k 或零补齐。'
       };
     }
 
     var value = global.BP && global.BP.physics
-      ? global.BP.physics.wavelengthBasic({ d: d, D: D, dxPx: stats.sodium.meanPx, k: k }).value
-      : d * stats.sodium.meanPx * k / D * 1e6;
-    var fluxRelU = stats.sodium.uAPx !== null
-      ? stats.sodium.uAPx / stats.sodium.meanPx
+      ? global.BP.physics.wavelengthBasic({ d: d, D: D, dxPx: stats.sodium.meanMm, k: 1 }).value
+      : d * stats.sodium.meanMm / D * 1e6;
+    var fluxRelU = stats.sodium.uAMm !== null
+      ? stats.sodium.uAMm / stats.sodium.meanMm
       : null;
     var dRelU = trace && finite(trace.u_d_mm)
       ? Number(trace.u_d_mm) / d
@@ -411,30 +558,24 @@
     if (sameSource) {
       warnings.push('本轮 A 由二次成像 d、a 反算；再用该 A 追迹得到的 d 与放大率法同源，不能当作独立实验验证。');
     }
-    warnings.push('追迹法使用 k=' + k.toPrecision(6) + ' mm/px；该值未由本轮可信刻线尺寸证实，波长只作条件结果。');
     return {
       valueNm: value,
       uNm: relativeU !== null ? value * relativeU : null,
       relativeU: relativeU,
       sourceType: 'modelTrace',
-      conditional: true,
+      conditional: sameSource,
       sameSource: sameSource,
       dTraceMm: d,
       uA_dTraceMm: trace && finite(trace.u_d_mm)
         ? Number(trace.u_d_mm)
         : (geometry ? geometry.stats.uA_dMm : null),
-      kMmPx: k,
       DMm: D,
       uA_DMm: geometry ? geometry.stats.uA_DMm : null,
       missing: [],
       accuracy: Errors.accuracy(value, REPORT_PRESET.standardNm),
       sourceItems: [
-        provenance('Δx_Na', stats.sodium.meanPx, 'measured',
-          '当前导入会话 sodium 角色 ' + stats.sodium.n + ' 帧均值'),
-        provenance('k', k, kSourceType,
-          cal && cal.source
-            ? String(cal.source)
-            : '报告表 5.1 预设，待本轮刻线尺寸核实'),
+        provenance('Δx_Na', stats.sodium.meanMm, 'measured',
+          'sodium 角色 ' + stats.sodium.nMm + ' 个正式帧的逐帧 k_i 毫米均值'),
         provenance('d_trace', d, 'modelTrace',
           trace && trace.label
             ? String(trace.label)
@@ -442,6 +583,7 @@
         provenance('D', D, sessionParam(sessions, 'D') !== null ? 'manual' : 'measured',
           sessionParam(sessions, 'D') !== null ? '当前会话观察距离' : 'a+z2 二次成像实测')
       ],
+      kStats: calibrationSummary(stats.sodium.frames),
       formula: 'λ = d_trace·Δx·k / D',
       note: sameSource
         ? '与横向放大率法使用同一组 d1、d2；当前数值只说明追迹公式自洽，不是第三条独立实测。'
@@ -456,16 +598,11 @@
   function buildMagnification(stats, sessions, warnings, geometry, options) {
     options = options || {};
     var missingItems = [];
-    if (!stats.sodium.n) missingItems.push(missing('sodium', '缺少钠光条纹有效帧'));
-    if (!geometry) missingItems.push(missing('secondaryImaging', '缺少 d1、d2、a、z2 二次成像记录'));
-    var cal = sessionCalibration(sessions);
-    var k = cal ? numberOrNull(cal.k_mm_px) : null;
-    var kSourceType = cal ? 'manual' : 'missing';
-    if (!(k > 0) && options.allowReportPreset) {
-      k = REPORT_PRESET.k_mm_px;
-      kSourceType = 'reportPreset';
+    if (!stats.sodium.nMm) {
+      missingItems.push(missing('sodium', '缺少钠光逐帧同框标定后的正式帧'));
+      missingItems.push(missing('calibration', '缺少与条纹同框的逐帧刻线像素当量'));
     }
-    if (!(k > 0)) missingItems.push(missing('calibration', '缺少有效像素当量 k'));
+    if (!geometry) missingItems.push(missing('secondaryImaging', '缺少 d1、d2、a、z2 二次成像记录'));
     var d = geometry ? geometry.stats.dMm : null;
     var beta = geometry ? geometry.stats.beta : null;
     var D = geometry ? geometry.stats.DMm : null;
@@ -477,37 +614,34 @@
         sourceType: 'missing',
         missing: missingItems,
         formula: 'λ = √(d1d2)·Δx·k/(a+z2)',
-        note: '需要双方位像间距、导轨距离、钠光条纹与像素当量。'
+        note: '需要双方位像间距、导轨距离，以及钠光条纹的逐帧同框毫米值。',
+        kStats: calibrationSummary(stats.sodium.frames)
       };
     }
 
-    var value = d * stats.sodium.meanPx * k / D * 1e6;
-    var fluxRelU = stats.sodium.uAPx !== null
-      ? stats.sodium.uAPx / stats.sodium.meanPx
+    var value = d * stats.sodium.meanMm / D * 1e6;
+    var fluxRelU = stats.sodium.uAMm !== null
+      ? stats.sodium.uAMm / stats.sodium.meanMm
       : null;
     var DRelU = relativeUncertainty(D, geometry.stats.uA_DMm);
     var relativeU = fluxRelU !== null && geometry.stats.relativeU_d !== null && DRelU !== null
       ? rootSumSquares([fluxRelU, geometry.stats.relativeU_d, DRelU])
       : null;
-    warnings.push('放大率法的 d 与 D 已由二次成像记录计算；k=' + k.toPrecision(6) +
-      ' mm/px 若仍来自报告预设，则波长准确度受像素当量系统误差支配。');
+    warnings.push('放大率法的 d 与 D 已由二次成像记录计算；Δx 使用每个条纹帧自己的刻线像素当量。');
     return {
       valueNm: value,
       uNm: relativeU !== null ? value * relativeU : null,
       relativeU: relativeU,
-      sourceType: kSourceType === 'reportPreset' ? 'reportPreset' : 'measured',
-      conditional: true,
+      sourceType: 'measured',
+      conditional: false,
       dMm: d,
       beta: beta,
       DMm: D,
-      kMmPx: k,
       missing: [],
       accuracy: Errors.accuracy(value, REPORT_PRESET.standardNm),
       sourceItems: [
-        provenance('Δx_Na', stats.sodium.meanPx, 'measured',
-          '当前导入会话 sodium 角色 ' + stats.sodium.n + ' 帧均值'),
-        provenance('k', k, kSourceType,
-          cal ? (cal.source || '当前会话像素当量') : '报告表 5.1 预设，待本轮刻线尺寸核实'),
+        provenance('Δx_Na', stats.sodium.meanMm, 'measured',
+          'sodium 角色 ' + stats.sodium.nMm + ' 个正式帧的逐帧 k_i 毫米均值'),
         provenance('d1', geometry.stats.d1Mm, 'measured',
           '放大像两位置水平差均值，n=' + geometry.observations.d1Mm.length),
         provenance('d2', geometry.stats.d2Mm, 'measured',
@@ -516,9 +650,153 @@
         provenance('β', beta, 'measured', '由本轮 d1、d2 按 √(d1/d2) 计算'),
         provenance('D', D, 'measured', 'a+z2 二次成像实测')
       ],
+      kStats: calibrationSummary(stats.sodium.frames),
       formula: 'λ = √(d1d2)·Δx·k/(a+z2)',
-      note: 'd、β、D 均来自本轮手写记录；k 的来源决定结果是否仍为条件计算。'
+      note: 'd、β、D 均来自本轮手写记录；Δx 只采用当前会话中自动或人工确认的逐帧同框标定帧。'
     };
+  }
+
+  /*
+   * 旧全局 k 只保留为“条件情景”，用于解释历史结果为何偏离；
+   * 该对象与 methods 严格分开，不参与正式准确度评价。
+   */
+  function buildLegacyConditional(stats, geometry) {
+    var ratio = {
+      valueNm: null,
+      uNm: null,
+      relativeU: null,
+      sourceType: 'missing',
+      missing: []
+    };
+    var magnification = {
+      valueNm: null,
+      uNm: null,
+      relativeU: null,
+      sourceType: 'missing',
+      missing: []
+    };
+    var trace = {
+      valueNm: null,
+      uNm: null,
+      relativeU: null,
+      sourceType: 'missing',
+      missing: []
+    };
+    if (!stats || !stats.sodium || !stats.reference ||
+        !(stats.sodium.meanPx > 0) || !(stats.reference.meanPx > 0)) {
+      ratio.missing.push(missing('roles', '条件情景缺少钠光或红光像素统计'));
+    } else {
+      var ratioResult = Errors.ratioConditional({
+        standard: {
+          mean: stats.sodium.meanPx,
+          sd: stats.sodium.sdPx,
+          n: stats.sodium.nPx || stats.sodium.n
+        },
+        target: {
+          mean: stats.reference.meanPx,
+          sd: stats.reference.sdPx,
+          n: stats.reference.nPx || stats.reference.n
+        },
+        lambdaStandardNm: REPORT_PRESET.standardNm,
+        nStandard: REPORT_PRESET.nNa,
+        nTarget: REPORT_PRESET.nRef,
+        nominalTargetNm: REPORT_PRESET.lamRef_nm,
+        conditional: true,
+        referenceOnly: stats.reference.referenceOnly
+      });
+      ratio = {
+        valueNm: ratioResult.valueNm,
+        uNm: ratioResult.uNm,
+        relativeU: ratioResult.relativeU,
+        sourceType: 'reportPreset',
+        conditional: true,
+        missing: [],
+        accuracy: ratioResult.accuracy,
+        uncertainty: (function () {
+          try {
+            return Errors.ratioTypeABudget({
+              standard: { mean: stats.sodium.meanPx, sd: stats.sodium.sdPx, n: stats.sodium.nPx || stats.sodium.n },
+              target: { mean: stats.reference.meanPx, sd: stats.reference.sdPx, n: stats.reference.nPx || stats.reference.n },
+              lambdaStandardNm: REPORT_PRESET.standardNm,
+              nStandard: REPORT_PRESET.nNa,
+              nTarget: REPORT_PRESET.nRef,
+              nominalTargetNm: REPORT_PRESET.lamRef_nm
+            });
+          } catch (err) {
+            return null;
+          }
+        })(),
+        accuracyBasis: ratioResult.accuracyBasis,
+        terms: ratioResult.terms,
+        formula: ratioResult.formula,
+        sourceItems: [
+          provenance('Δx_Na', stats.sodium.meanPx, 'measured', '钠光标准条纹像素均值，未进入正式毫米口径'),
+          provenance('Δx_R', stats.reference.meanPx,
+            stats.reference.referenceOnly ? 'referenceOnly' : 'measured',
+            '红光待测条纹像素均值，未进入正式毫米口径'),
+          provenance('λ_Na', REPORT_PRESET.standardNm, 'reportPreset', '钠光标准值 589.3 nm（标准，非实测）'),
+          provenance('n_Na', REPORT_PRESET.nNa, 'reportPreset', '钠光折射率（N-BK7 假设）'),
+          provenance('n_R', REPORT_PRESET.nRef, 'reportPreset', '红光折射率（N-BK7 假设）'),
+          provenance('650 nm', REPORT_PRESET.lamRef_nm, 'nominal', '激光器标称值，仅作偏差比较')
+        ],
+        note: '仅用于说明像素比与报告光学参数下的条件偏差，不是逐帧标定实测。'
+      };
+    }
+    if (stats && stats.sodium && stats.sodium.meanPx > 0 && geometry) {
+      var gm = geometry.stats;
+      var fluxRelU = stats.sodium.uAPx !== null
+        ? stats.sodium.uAPx / stats.sodium.meanPx
+        : null;
+      var dRelU = gm.relativeU_d;
+      var dRelUValue = relativeUncertainty(gm.DMm, gm.uA_DMm);
+      var relU = fluxRelU !== null && dRelU !== null && dRelUValue !== null
+        ? rootSumSquares([fluxRelU, dRelU, dRelUValue])
+        : null;
+      var value = gm.dMm * stats.sodium.meanPx * REPORT_PRESET.k_mm_px / gm.DMm * 1e6;
+      magnification = {
+        valueNm: value,
+        uNm: relU !== null ? value * relU : null,
+        relativeU: relU,
+        sourceType: 'reportPreset',
+        conditional: true,
+        missing: [],
+        accuracy: Errors.accuracy(value, REPORT_PRESET.standardNm),
+        dMm: gm.dMm,
+        beta: gm.beta,
+        DMm: gm.DMm,
+        kMmPx: REPORT_PRESET.k_mm_px,
+        formula: 'λ = √(d1d2)·Δx_px·k_预设/(a+z2)',
+        sourceItems: [
+          provenance('Δx_Na', stats.sodium.meanPx, 'measured', '历史像素均值'),
+          provenance('k', REPORT_PRESET.k_mm_px, 'reportPreset', '照片报告表旧全局像素当量'),
+          provenance('d', gm.dMm, 'measured', '二次成像记录'),
+          provenance('D', gm.DMm, 'measured', 'a+z2 二次成像记录')
+        ],
+        note: '旧全局 k 条件情景；不得称为逐帧刻线实测误差。'
+      };
+      trace = {
+        valueNm: value,
+        uNm: relU !== null ? value * relU : null,
+        relativeU: relU,
+        sourceType: 'modelTrace',
+        conditional: true,
+        sameSource: true,
+        dTraceMm: gm.dMm,
+        DMm: gm.DMm,
+        kMmPx: REPORT_PRESET.k_mm_px,
+        missing: [],
+        accuracy: Errors.accuracy(value, REPORT_PRESET.standardNm),
+        formula: 'λ = d_trace·Δx_px·k_预设/D',
+        note: '与横向放大率条件情景同源，只核对公式自洽。'
+      };
+    } else if (stats && stats.sodium && stats.sodium.meanPx > 0) {
+      magnification.missing.push(missing('secondaryImaging', '缺少二次成像记录'));
+      trace.missing.push(missing('secondaryImaging', '缺少二次成像记录'));
+    } else {
+      magnification.missing.push(missing('sodium', '缺少钠光像素统计'));
+      trace.missing.push(missing('sodium', '缺少钠光像素统计'));
+    }
+    return { ratio: ratio, trace: trace, magnification: magnification };
   }
 
   function deriveDataset(dataset) {
@@ -558,24 +836,35 @@
      * 报告快照可以直接携带真实汇总统计（帧数、均值、标准差），
      * 避免为了复用聚合器而复制或伪造个体帧。
      */
-    var stats = dataset.roleStats && dataset.roleStats.sodium
-      ? dataset.roleStats
-      : collectedStats;
+    var stats = {};
+    ['sodium', 'reference', 'no_lens', 'with_lens', 'calibration'].forEach(function (role) {
+      var supplied = dataset.roleStats && dataset.roleStats[role]
+        ? dataset.roleStats[role]
+        : {};
+      stats[role] = Object.assign({}, collectedStats[role], supplied);
+      // 聚合快照允许只存角色汇总，不复制个体帧；缺失时统一补空数组供审计使用。
+      if (!Array.isArray(stats[role].frames)) stats[role].frames = [];
+      stats[role].referenceOnly = stats[role].referenceOnly === true;
+    });
     var warnings = [];
     if (stats.reference.referenceOnly) {
-      warnings.push('红光参考被强制标记为 referenceOnly，不得作为正式钠光实验数据。');
+      warnings.push('红光待测记录带有旧版 referenceOnly 标记，需人工确认后才能用于正式比值法。');
     }
     if (geometry) {
       warnings.push('本轮 d=√(d1d2)、β=√(d1/d2)、D=a+z2 均为手写记录派生量；A 由 d、a、n 反算。');
     }
     var methods = {
-      ratio: buildRatio(stats, sessions, warnings),
+      ratio: buildRatio(stats, sessions, warnings, options),
       trace: buildTrace(stats, sessions, warnings, geometry, options),
       magnification: buildMagnification(stats, sessions, warnings, geometry, options)
     };
     dataset.actualGeometry = geometry;
     dataset.roleStats = stats;
     dataset.methods = methods;
+    dataset.legacyConditional = buildLegacyConditional(stats, geometry);
+    if (geometry) {
+      warnings.push('旧全局 k 条件情景中的追迹值与放大率法同源；它只核对公式自洽，不能当作独立实验验证。');
+    }
     dataset.warnings = Array.from(new Set(warnings));
     dataset.rayTrace = rayTraceCurve({ geometry: geometry });
     dataset.historicalSimulation = clone(HISTORICAL_SIMULATION);
@@ -608,13 +897,40 @@
       provenance('报告 A', REPORT_PRESET.A_deg, 'reportPreset', '研究报告表 5.1 条件值，不作为本轮实测'),
       provenance('报告 D', REPORT_PRESET.D_mm, 'reportPreset', '研究报告表 5.1 条件值，不作为本轮实测'),
       provenance('k 情景计算', REPORT_PRESET.k_mm_px, 'reportPreset',
-        '仅用于展示条件波长；L=5 mm 与刻线像素间距的对应关系仍待核实')
+        '仅用于历史条件波长；相邻刻线虽确认 1 mm，但自动刻线残差仍待人工确认')
     );
     return dataset;
   }
 
   function exampleRecord() {
     var now = new Date().toISOString();
+    function frame(id, role, deltaXPx, stripeCount, referenceOnly) {
+      var kMmPx = role === 'sodium' ? 0.004 : 0.0042;
+      return {
+        schema: 'bp.frame/1',
+        id: id,
+        role: role,
+        deltaXPx: deltaXPx,
+        deltaXmm: deltaXPx * kMmPx,
+        stripeCount: stripeCount,
+        source: 'video',
+        sourceName: role === 'sodium'
+          ? 'VID_20261103_152203.mp4'
+          : 'VID_20261117_144210.mp4',
+        calibrationStatus: 'autoAccepted',
+        localCalibration: {
+          schema: 'bp.frame-calibration/1',
+          status: 'autoAccepted',
+          method: 'auto-same-frame',
+          kMmPx: kMmPx,
+          tickSpacingMm: 1,
+          lineCount: 5,
+          relativeRms: 0.004,
+          source: '示例同框刻线'
+        },
+        selection: { referenceOnly: !!referenceOnly }
+      };
+    }
     return {
       schema: 'bp.record/2',
       exportedAt: now,
@@ -629,26 +945,10 @@
         params: {},
         paramsSources: {},
         frames: [
-          {
-            schema: 'bp.frame/1', id: 'sodium-1', role: 'sodium',
-            deltaXPx: 104.9, stripeCount: 11, source: 'video',
-            sourceName: 'VID_20261103_152203.mp4', selection: { referenceOnly: false }
-          },
-          {
-            schema: 'bp.frame/1', id: 'sodium-2', role: 'sodium',
-            deltaXPx: 105.0, stripeCount: 11, source: 'video',
-            sourceName: 'VID_20261103_152203.mp4', selection: { referenceOnly: false }
-          },
-          {
-            schema: 'bp.frame/1', id: 'reference-1', role: 'reference',
-            deltaXPx: 114.8, stripeCount: 8, source: 'video',
-            sourceName: 'VID_20261117_144210.mp4', selection: { referenceOnly: true }
-          },
-          {
-            schema: 'bp.frame/1', id: 'reference-2', role: 'reference',
-            deltaXPx: 114.8, stripeCount: 8, source: 'video',
-            sourceName: 'VID_20261117_144210.mp4', selection: { referenceOnly: true }
-          }
+          frame('sodium-1', 'sodium', 104.9, 11, false),
+          frame('sodium-2', 'sodium', 105.0, 11, false),
+          frame('reference-1', 'reference', 114.8, 8, true),
+          frame('reference-2', 'reference', 114.8, 8, true)
         ]
       }]
     };
@@ -681,20 +981,26 @@
       sessions: [],
       roleStats: {
         sodium: {
-          n: 20,
+          n: 0,
+          nEvidence: 20,
+          nPx: 20,
+          nMm: 0,
           meanPx: 104.9543787227124,
           sdPx: 0.1677835503,
           uAPx: 0.1677835503 / Math.sqrt(20),
           cv: 0.001599,
           meanStripeCount: 10.95,
           referenceOnly: false,
-          sourceType: 'measured',
+          sourceType: 'missing',
           frames: [],
           sourceName: 'VID_20261103_152203.mp4',
           durationSeconds: 44.159
         },
         reference: {
-          n: 5,
+          n: 0,
+          nEvidence: 5,
+          nPx: 5,
+          nMm: 0,
           meanPx: 114.76325484473463,
           sdPx: 1.8032065225,
           uAPx: 1.8032065225 / Math.sqrt(5),
@@ -707,21 +1013,46 @@
           durationSeconds: 8.692
         },
         no_lens: {
-          n: 0, meanPx: null, sdPx: null, uAPx: null, cv: null,
+          n: 0, nEvidence: 0, nPx: 0, nMm: 0,
+          meanPx: null, sdPx: null, uAPx: null, cv: null,
           meanStripeCount: null, referenceOnly: false, sourceType: 'missing',
           frames: []
         },
         with_lens: {
-          n: 0, meanPx: null, sdPx: null, uAPx: null, cv: null,
+          n: 0, nEvidence: 0, nPx: 0, nMm: 0,
+          meanPx: null, sdPx: null, uAPx: null, cv: null,
           meanStripeCount: null, referenceOnly: false, sourceType: 'missing',
           frames: []
         },
         calibration: {
-          n: 0, meanPx: null, sdPx: null, uAPx: null, cv: null,
+          n: 0, nEvidence: 0, nPx: 0, nMm: 0,
+          meanPx: null, sdPx: null, uAPx: null, cv: null,
           meanStripeCount: null, referenceOnly: false, sourceType: 'missing',
           frames: []
         }
       },
+      images: [],
+      provenance: []
+    });
+  }
+
+  /*
+   * 空模板只建立结构，不填入任何实测、预设或模型结果。
+   * 当本机缓存与默认快照都不可用时，报告页用它显示“尚未导入实测数据”。
+   */
+  function createEmptyDataset() {
+    return deriveDataset({
+      schema: 'bp.dataset/1',
+      scenarioId: '',
+      scenarioLabel: '尚未导入实测数据',
+      meta: {
+        title: '菲涅耳双棱镜实验数据报告',
+        generatedAt: new Date().toISOString(),
+        source: '空报告模板',
+        experimentDate: ''
+      },
+      useReportPreset: false,
+      sessions: [],
       images: [],
       provenance: []
     });
@@ -798,7 +1129,8 @@
   function fromReport(snapshot) {
     if (!snapshot || !snapshot.dataset) throw new Error('需要 bp.report/1');
     var dataset = clone(snapshot.dataset);
-    if (!dataset.roleStats || !dataset.methods) dataset = deriveDataset(dataset);
+    // 旧快照可能保存了全局 k 方法值；重新按当前逐帧正式口径派生，避免旧口径复活。
+    dataset = deriveDataset(dataset);
     if (!dataset.rayTrace) dataset.rayTrace = rayTraceCurve();
     if (Array.isArray(snapshot.imageManifest) && snapshot.imageManifest.length) {
       dataset.images = clone(snapshot.imageManifest);
@@ -878,6 +1210,7 @@
     deriveSecondaryGeometry: deriveSecondaryGeometry,
     isSourceType: isSourceType,
     createDefaultDataset: createDefaultDataset,
+    createEmptyDataset: createEmptyDataset,
     deriveDataset: deriveDataset,
     exampleRecord: exampleRecord,
     emptyRecord: emptyRecord,

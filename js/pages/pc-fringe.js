@@ -1,6 +1,7 @@
 /* =========================================================================
  * pages/pc-fringe.js —— P5：PC 端图像分析 + 导入手机记录
- * 依赖：physics.js, core/{fmt,ui,store,plot,fringe}.js, pages/pc.js（在 pc.js 之后加载）
+ * 依赖：physics.js, core/{fmt,ui,store,plot,fringe,frame-calibration}.js,
+ *       pages/pc.js（在 pc.js 之后加载）
  *
  * 两件事：
  *   ① 覆盖 pc.js 里 analyzeImage 的占位：选图 → 投影 → 提取 Δx → 剖面图
@@ -55,6 +56,65 @@
     return '斜条纹，' + a.toFixed(1) + '°';
   }
 
+  /* 重新按 fringe.js 的 maxSide=1600 口径读取同一张图，
+   * 使刻线坐标与 r.roi 处于同一分析坐标系。
+   */
+  function readAnalysisPixels(file) {
+    return Promise.resolve().then(function () {
+      if (typeof global.createImageBitmap === 'function') return global.createImageBitmap(file);
+      return new Promise(function (resolve, reject) {
+        var img = new global.Image();
+        img.onload = function () { resolve(img); };
+        img.onerror = function () { reject(new Error('图片解码失败')); };
+        img.src = global.URL.createObjectURL(file);
+      });
+    }).then(function (source) {
+      var sourceWidth = source.width || source.naturalWidth;
+      var sourceHeight = source.height || source.naturalHeight;
+      var scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
+      var width = Math.max(32, Math.round(sourceWidth * scale));
+      var height = Math.max(32, Math.round(sourceHeight * scale));
+      var canvas = doc.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      var context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(source, 0, 0, width, height);
+      return {
+        imageData: context.getImageData(0, 0, width, height),
+        width: width,
+        height: height,
+        scale: scale
+      };
+    });
+  }
+
+  function calibratePhoto(file, fringeResult) {
+    if (!BP.frameCalibration) {
+      return Promise.resolve({
+        calibration: {
+          status: 'rejected',
+          kMmPx: null,
+          lineCount: 0,
+          warnings: ['frame-calibration-module-missing']
+        },
+        geometry: null
+      });
+    }
+    return readAnalysisPixels(file).then(function (px) {
+      return BP.frameCalibration.calibrateSameFrame(
+        px.imageData.data,
+        px.width,
+        px.height,
+        fringeResult,
+        {
+          analysisScale: px.scale,
+          tickSpacingMm: 1,
+          minVisibility: LOW_VISIBILITY
+        }
+      );
+    });
+  }
+
   /* ---------------- ① 选图 → 提取 ---------------- */
   function analyzeImage() {
     var input = $('imageInput');
@@ -62,7 +122,16 @@
     var k = currentK();
     BP.ui.loading(true);
     return BP.fringe.analyzeFile(input.files[0], { k: k }).then(function (r) {
-      var dxMm = finiteNumber(r.deltaXmm);
+      return calibratePhoto(input.files[0], r).then(function (local) {
+      var scale = finiteNumber(r.scale) || 1;
+      var sourceDeltaXPx = r.periodPx / scale;
+      var calibrated = BP.frameCalibration
+        ? BP.frameCalibration.attachLocalCalibration({
+          deltaXPx: sourceDeltaXPx,
+          stripeCount: r.stripeCount
+        }, local.calibration)
+        : { deltaXmm: null, calibrationStatus: 'rejected' };
+      var dxMm = finiteNumber(calibrated.deltaXmm);
       var visibility = finiteNumber(r.visibility);
       var lowVisibility = visibility !== null && visibility < LOW_VISIBILITY;
       var rows = [
@@ -72,8 +141,8 @@
           cls: 'is-key',
           note: dxMm === null ? '像素间距已提取；完成像素当量标定后才能得到毫米值' : ''
         },
-        { label: 'Δx（像素）', value: F.px(r.periodPx) + ' px' },
-        { label: '零交叉法交叉检查', value: F.px(r.periodPxCross) + ' px',
+        { label: 'Δx（原图像素）', value: F.px(sourceDeltaXPx) + ' px' },
+        { label: '零交叉法交叉检查', value: F.px(r.periodPxCross / scale) + ' px',
           note: '两种算法相差 ' + (isFinite(r.periodPxCross) ? (Math.abs(r.periodPx - r.periodPxCross) / r.periodPx * 100).toFixed(2) : '—') + '%' },
         {
           label: '可见度 V',
@@ -85,10 +154,17 @@
         { label: '识别通道 / 中央 ROI', value: r.signal + ' 通道 · ' + r.roi.width + ' × ' + r.roi.height + ' px' },
         { label: '自相关 / 频谱信噪比', value: (r.acfPeak * 100).toFixed(1) + '% / ' + r.spectralSnr.toFixed(1) },
         {
-          label: '像素当量 k',
-          value: finiteNumber(k) !== null ? F.sci(k) + ' mm/px' : '未标定',
-          cls: finiteNumber(k) === null ? 'is-warn' : '',
-          note: r.scale && r.scale !== 1 ? '图已缩 ' + r.scale.toFixed(2) + '×，已折算' : ''
+          label: '同框逐帧标定',
+          value: BP.frameCalibration
+            ? BP.frameCalibration.statusLabel(local.calibration.status)
+            : '模块缺失',
+          cls: calibrated.calibrationStatus === 'autoAccepted' ||
+            calibrated.calibrationStatus === 'manualAccepted' ? '' : 'is-warn',
+          note: (finiteNumber(local.calibration.kMmPx)
+            ? 'k=' + F.sci(local.calibration.kMmPx) + ' mm/px，刻线 ' +
+              local.calibration.lineCount + ' 条'
+            : '未确认刻线，保留像素证据但不生成毫米值') +
+            (local.calibration.source === 'manual' ? '，来源：人工两点' : '，来源：自动刻线')
         },
         { label: '原图尺寸', value: r.sourceSize.width + ' × ' + r.sourceSize.height + ' px' }
       ];
@@ -105,16 +181,6 @@
             paramsSources: preset.sources
           });
         }
-        if (isFinite(k) && k > 0) {
-          BP.sessions.updateSession(session.id, {
-            calibration: {
-              k_mm_px: k,
-              source: 'manual',
-              at: new Date().toISOString()
-            }
-          });
-          session = BP.sessions.getSession(session.id);
-        }
         var roleEl = $('pcRoleSelect');
         var role = roleEl && roleEl.value ? roleEl.value : 'sodium';
         BP.sessions.addFrame(session.id, {
@@ -122,18 +188,22 @@
           blob: input.files[0],
           name: input.files[0].name,
           size: input.files[0].size,
-          deltaXPx: r.periodPx,
-          deltaXmm: r.deltaXmm,
+          deltaXPx: sourceDeltaXPx,
+          deltaXmm: calibrated.deltaXmm,
           stripeCount: r.stripeCount,
           quality: r.visibility,
           source: 'photo',
           sourceName: input.files[0].name,
+          localCalibration: local.calibration,
+          calibrationStatus: calibrated.calibrationStatus,
+          sourcePixels: r.sourceSize,
           analysis: {
             axis: r.axis,
             visibility: r.visibility,
             periodPxCross: r.periodPxCross,
             stripeAngleDeg: r.stripeAngleDeg,
             roi: r.roi,
+            analysisScale: scale,
             signal: r.signal,
             spectralSnr: r.spectralSnr,
             acfPeak: r.acfPeak,
@@ -148,8 +218,14 @@
           }
         }).catch(fail);
       }
-      BP.store.saveHistory('fringe', { axis: r.axis, periodPx: r.periodPx, deltaXmm: r.deltaXmm, visibility: r.visibility });
+      BP.store.saveHistory('fringe', {
+        axis: r.axis,
+        periodPx: sourceDeltaXPx,
+        deltaXmm: calibrated.deltaXmm,
+        visibility: r.visibility
+      });
       if (BP.pages && BP.pages.pc && BP.pages.pc.renderHistory) BP.pages.pc.renderHistory();
+      });
     }).catch(fail).then(function () { BP.ui.loading(false); });
   }
 
@@ -167,7 +243,11 @@
         var roleRows = session
           ? BP.sessions.requiredRoles(session.method).map(function (role) {
               var stat = BP.sessions.roleStats(session.id, role);
-              return { label: stat.label, value: stat.n + ' 帧' + (stat.n ? '，Δx=' + F.px(stat.meanPx) : '') };
+              return {
+                label: stat.label,
+                value: stat.n + ' 个正式帧 · ' + stat.nEvidence + ' 个证据帧' +
+                  (stat.nPx ? '，Δx=' + F.px(stat.meanPx) : '')
+              };
             })
           : [];
         var rows = [

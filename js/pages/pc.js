@@ -16,8 +16,8 @@
   // 表 5.1（报告口径）。金标准的权威副本在 tools/golden.json，改这里之前先对报告。
   var REPORT = {
     d: 0.90213, D: 1000, k: 0.0040, dxPx: 163.3,
-    dxNaPx: 163.3, dxRefPx: 180.9, lamRef: 650,
-    nNa: 1.5168, nRef: 1.5145
+    dxNaPx: 163.3, dxRefPx: 180.9, lambdaStandardNm: 589.3,
+    nStandard: 1.5168, nTarget: 1.5145
   };
   // 三条路径共用同一批 Δx，公共项单列（报告 8.2）；表 8.1 的 u(Δx)/Δx
   var COMMON_REL_U = 6.4e-6;
@@ -90,18 +90,31 @@
   /* ---------------- 比值法（含色散修正） ---------------- */
   function calcRatioMethod() {
     try {
-      var dxNa = num('fringe_sodium'), dxRef = num('fringe_laser'), lamRef = num('lambda_laser');
-      var nNa = num('n_na', REPORT.nNa), nRef = num('n_ref', REPORT.nRef);
-      var r = BP.physics.wavelengthRatio({ dxNaPx: dxNa, dxRefPx: dxRef, lamRef: lamRef, nNa: nNa, nRef: nRef });
-      var noFix = lamRef * (dxNa / dxRef);
+      var dxNa = num('fringe_sodium');
+      var dxRef = num('fringe_laser');
+      var lambdaStandardNm = num('lambda_laser', REPORT.lambdaStandardNm);
+      var nStandard = num('n_na', REPORT.nStandard);
+      var nTarget = num('n_ref', REPORT.nTarget);
+      var r = BP.physics.wavelengthRatio({
+        deltaXStandardPx: dxNa,
+        deltaXTargetPx: dxRef,
+        lambdaStandardNm: lambdaStandardNm,
+        nStandard: nStandard,
+        nTarget: nTarget
+      });
+      var noFix = lambdaStandardNm * (dxRef / dxNa);
       BP.ui.result($('ratioResult'), [
-        { label: '色散修正因子', value: r.dispersion.toFixed(5), note: '(n_Na−1)/(n_ref−1)' },
-        { label: '波长 λ_Na', value: F.lam(r.value), cls: 'is-key' },
+        { label: '色散修正因子', value: r.dispersion.toFixed(5), note: '(n_R−1)/(n_Na−1)' },
+        { label: '红光波长 λ_R', value: F.lam(r.value), cls: 'is-key' },
         { label: '若漏掉修正', value: F.lam(noFix),
           note: '相差 ' + ((noFix - r.value) / r.value * 100).toFixed(2) + '%（报告论证过不可省略）' },
         { label: '公式', value: r.formula, cls: 'is-dim' }
       ]);
-      BP.store.saveHistory('ratio', { dxNaPx: dxNa, dxRefPx: dxRef, lamRef: lamRef, nNa: nNa, nRef: nRef, lamNm: r.value });
+      BP.store.saveHistory('ratio', {
+        dxNaPx: dxNa, dxRefPx: dxRef,
+        lambdaStandardNm: lambdaStandardNm, nStandard: nStandard, nTarget: nTarget,
+        lamNm: r.value
+      });
       renderHistory();
     } catch (e) { fail(e); }
   }
@@ -373,8 +386,8 @@
     setVal('d_value', REPORT.d); setVal('D_value', REPORT.D);
     setVal('pixel_size', REPORT.k); setVal('fringe_period_px', REPORT.dxPx);
     setVal('fringe_sodium', REPORT.dxNaPx); setVal('fringe_laser', REPORT.dxRefPx);
-    setVal('lambda_laser', REPORT.lamRef);
-    setVal('n_na', REPORT.nNa); setVal('n_ref', REPORT.nRef);
+    setVal('lambda_laser', REPORT.lambdaStandardNm);
+    setVal('n_na', REPORT.nStandard); setVal('n_ref', REPORT.nTarget);
     BP.ui.alert('已填入研究报告表 5.1 预设；这些值不是当前实测，来源已在页面顶部标明', 'info');
   }
 
@@ -387,9 +400,9 @@
     'unc_d_pc', 'unc_D_pc', 'unc_fringe_pc'
   ];
   var FIELD_LABEL = {
-    dxNaPx: '钠光 Δx', dxRefPx: '参考光 Δx', dxNaMm: '无透镜 Δx', dxPrimeMm: '加透镜 Δx′',
-    k: '像素当量 k', d: 'd', D: 'D', lamRef: '参考波长', nNa: 'n_Na',
-    nRef: 'n_ref', dPrime: 'd′', beta: 'β', lambdaNm: '波长 λ'
+    dxNaPx: '钠光 Δx', dxRefPx: '红光待测 Δx', dxNaMm: '无透镜 Δx', dxPrimeMm: '加透镜 Δx′',
+    k: '像素当量 k', d: 'd', D: 'D', lambdaStandardNm: '钠光标准波长',
+    nStandard: 'n_Na', nTarget: 'n_R', dPrime: 'd′', beta: 'β', lambdaNm: '波长 λ'
   };
 
   function bindSessionFieldTracking() {
@@ -446,9 +459,9 @@
     } else if (data.method === 'ratio') {
       assignSessionValue('fringe_sodium', v.dxNaPx, force, skipped);
       assignSessionValue('fringe_laser', v.dxRefPx, force, skipped);
-      assignSessionValue('lambda_laser', v.lamRef, force, skipped);
-      assignSessionValue('n_na', v.nNa, force, skipped);
-      assignSessionValue('n_ref', v.nRef, force, skipped);
+      assignSessionValue('lambda_laser', v.lambdaStandardNm, force, skipped);
+      assignSessionValue('n_na', v.nStandard, force, skipped);
+      assignSessionValue('n_ref', v.nTarget, force, skipped);
     } else if (data.method === 'magnification') {
       assignSessionValue('mag_dPrime', v.dPrime, force, skipped);
       assignSessionValue('mag_beta', v.beta, force, skipped);
@@ -478,7 +491,7 @@
     if (!host) return;
     var keysByMethod = {
       basic: ['dxNaPx', 'k', 'd', 'D', 'lambdaNm'],
-      ratio: ['dxNaPx', 'dxRefPx', 'lamRef', 'nNa', 'nRef', 'lambdaNm'],
+      ratio: ['dxNaPx', 'dxRefPx', 'lambdaStandardNm', 'nStandard', 'nTarget', 'lambdaNm'],
       magnification: ['dxNaMm', 'dxPrimeMm', 'dPrime', 'beta', 'D', 'lambdaNm'],
       trace: ['dxNaPx', 'k', 'd', 'D', 'lambdaNm']
     };
@@ -489,11 +502,12 @@
     ];
     ['sodium', 'reference', 'no_lens', 'with_lens'].forEach(function (role) {
       var stat = data.stats[role];
-      if (!stat || !stat.n) return;
+      if (!stat || (!stat.n && !stat.nEvidence)) return;
       rows.push({
-        label: (BP.sessions.ROLE_LABEL[role] || role) + '有效帧',
+        label: (BP.sessions.ROLE_LABEL[role] || role) + '帧统计',
         // 旧会话可能缺少条纹数，只有真实数值才显示平均值。
-        value: stat.n + ' 帧' + (Number.isFinite(stat.meanStripeCount)
+        value: stat.n + ' 个正式帧 · ' + stat.nEvidence + ' 个证据帧' +
+          (Number.isFinite(stat.meanStripeCount)
           ? ' · 平均 ' + stat.meanStripeCount.toFixed(1) + ' 条条纹'
           : ''),
         note: stat.qualityStatus === 'reference-only'

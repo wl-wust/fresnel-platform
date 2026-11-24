@@ -1,6 +1,7 @@
 /* =========================================================================
  * pages/pc-video.js —— 手机实时推流、自动抽帧与最佳帧确认
- * 依赖：core/sessions.js, core/fringe.js, core/video-sampler.js,
+ * 依赖：core/frame-calibration.js, core/sessions.js, core/fringe.js,
+ *       core/video-sampler.js,
  *       live/lan-signaling.js, vendor/peerjs.min.js, vendor/qrcode.min.js
  * ========================================================================= */
 (function (global) {
@@ -31,6 +32,12 @@
   var workCanvas = doc.createElement('canvas');
   var frameCanvas = doc.createElement('canvas');
   var API;
+
+  function finiteNumber(value) {
+    return value !== null && value !== undefined && value !== '' && isFinite(value)
+      ? Number(value)
+      : null;
+  }
 
   function setStatus(text, state) {
     var host = $('videoLiveStatus');
@@ -204,6 +211,32 @@
     return Math.max(1, Math.floor(profile.length / Number(periodPx)) + 1);
   }
 
+  // 对条纹候选的同一张分析画布检测目镜刻线，不用会话全局 k 代替。
+  function sameFrameCalibration(imageData, width, height, fringeResult, analysisScale) {
+    if (!BP.frameCalibration || !BP.frameCalibration.calibrateSameFrame) {
+      return {
+        localCalibration: {
+          status: 'rejected',
+          warnings: ['frame-calibration-module-missing'],
+          kMmPx: null,
+          lineCount: 0
+        },
+        geometry: null
+      };
+    }
+    return BP.frameCalibration.calibrateSameFrame(
+      imageData,
+      width,
+      height,
+      fringeResult,
+      {
+        analysisScale: analysisScale,
+        tickSpacingMm: 1,
+        minVisibility: BP.videoSampler.DEFAULTS.minVisibility
+      }
+    );
+  }
+
   function revokePreview(item) {
     if (item && item.previewUrl) {
       global.URL.revokeObjectURL(item.previewUrl);
@@ -227,12 +260,20 @@
     }).slice(0, target);
   }
 
+  function candidateCluster(config) {
+    return BP.videoSampler.clusterCandidates(candidates, {
+      minGapMs: BP.videoSampler.DEFAULTS.minGapMs,
+      maxCandidates: config.target
+    });
+  }
+
   function renderCandidates() {
     var host = $('videoCandidateGallery');
     var statsHost = $('videoCandidateStats');
     if (!host || !statsHost) return;
     host.textContent = '';
     var config = currentConfig();
+    var cluster = candidateCluster(config);
     var stablePicked = selectedSet();
     var selectedIds = new Set(stablePicked.map(function (item) { return item.id; }));
 
@@ -255,10 +296,20 @@
 
       var meta = doc.createElement('div');
       meta.className = 'video-candidate-meta';
-      meta.textContent = item.deltaXPx.toFixed(1) + ' px · ' +
-        Math.round(item.score * 100) + ' 分 · 可见度 ' +
-        (item.visibility * 100).toFixed(1) + '%' +
-        (isFinite(item.stripeCount) ? ' · 约 ' + item.stripeCount + ' 条' : '');
+      var deltaXPx = finiteNumber(item.deltaXPx);
+      var deltaXmm = finiteNumber(item.deltaXmm);
+      var visibility = finiteNumber(item.visibility);
+      var score = finiteNumber(item.score);
+      var stripeCount = finiteNumber(item.stripeCount);
+      meta.textContent = (deltaXPx !== null ? deltaXPx.toFixed(1) : '—') + ' px · ' +
+        (score !== null ? Math.round(score * 100) : '—') + ' 分 · 可见度 ' +
+        (visibility !== null ? (visibility * 100).toFixed(1) : '—') + '%' +
+        (stripeCount !== null ? ' · 约 ' + stripeCount + ' 条' : '') +
+        ' · ' + (BP.frameCalibration
+          ? BP.frameCalibration.statusLabel(item.calibrationStatus)
+          : item.calibrationStatus) +
+        (deltaXmm !== null && deltaXmm > 0 ? ' · Δx=' + deltaXmm.toFixed(4) + ' mm' :
+          ' · 无正式毫米值');
 
       var actions = doc.createElement('div');
       actions.className = 'video-candidate-actions';
@@ -279,18 +330,24 @@
     var stats = BP.videoSampler.summary(stablePicked);
     var cvText = isFinite(stats.cv) ? (stats.cv * 100).toFixed(2) + '%' : '—';
     var stabilityOk = !isFinite(stats.cv) || stats.cv <= BP.videoSampler.DEFAULTS.maxCv;
-    var stability = '';
-    if (stats.n >= config.target && !stabilityOk) {
-      stability = ' · 波动偏大';
-    }
-    statsHost.textContent = '候选 ' + candidates.length + ' / 目标 ' + config.target +
+    var unstable = stats.n >= config.target && !stabilityOk;
+    var clusterShort = cluster.clusterCount < config.target;
+    var stability = unstable ? ' · 波动偏大，需复测或人工检查' : '';
+    statsHost.textContent = '候选 ' + candidates.length +
+      ' · 合格 ' + cluster.validCount +
+      ' · 稳定周期候选 ' + cluster.clusterCount +
+      ' / 目标 ' + config.target +
       ' · 入选 ' + stats.n + ' · 主频波动 ' + cvText + stability;
-    var referenceOnly = !stabilityOk && config.role === 'reference';
-    $('videoConfirmButton').disabled = stats.n < config.target ||
-      (!stabilityOk && config.role !== 'reference');
-    $('videoConfirmButton').textContent = referenceOnly
-      ? '确认写入参考角色（波动偏大）'
-      : '确认加入当前角色（' + config.target + ' 帧）';
+    /*
+     * 角色语义由用户选择的 sodium/reference 决定；波动门限只控制能否确认写入。
+     * 不再把红光自动降成 referenceOnly，也不允许波动超标时静默放行。
+     */
+    $('videoConfirmButton').disabled = stats.n < config.target || unstable;
+    $('videoConfirmButton').textContent = unstable
+      ? '波动偏大，暂不能写入'
+      : (clusterShort
+        ? '稳定周期候选不足'
+        : '确认加入当前角色（' + config.target + ' 帧）');
 
     var enough = BP.videoSampler.isEnough(candidates, config.target);
     if (enough && !enoughAnnounced) {
@@ -352,6 +409,24 @@
           sourceName: sourceName,
           analysis: compactAnalysis(result)
         };
+        var local = sameFrameCalibration(image.data, width, height, result, scale);
+        candidate.localCalibration = local.calibration;
+        candidate.calibrationStatus = local.calibration.status || 'rejected';
+        candidate.geometry = local.geometry ? {
+          count: local.geometry.count || 0,
+          spacingPx: local.geometry.spacingPx,
+          relativeRms: local.geometry.relativeRms,
+          method: local.geometry.method || '',
+          error: local.geometry.error || null
+        } : null;
+        candidate.sourcePixels = {
+          width: source.videoWidth,
+          height: source.videoHeight
+        };
+        var calibrated = BP.frameCalibration
+          ? BP.frameCalibration.attachLocalCalibration(candidate, local.calibration)
+          : candidate;
+        candidate.deltaXmm = calibrated.deltaXmm;
         if (!BP.videoSampler.isValid(candidate)) {
           resolve({ candidate: candidate, error: rejectReason(candidate) });
           return;
@@ -849,25 +924,29 @@
       return;
     }
     var session = ensureSession(config.method);
-    var k = currentK();
-    if (isFinite(k) && k > 0) {
-      BP.sessions.updateSession(session.id, {
-        calibration: {
-          k_mm_px: k,
-          source: 'manual',
-          at: new Date().toISOString()
-        }
-      });
-      session = BP.sessions.getSession(session.id);
-    }
     var stats = BP.videoSampler.summary(chosen);
     var stabilityOk = !isFinite(stats.cv) || stats.cv <= BP.videoSampler.DEFAULTS.maxCv;
+    if (!stabilityOk) {
+      setStatus('候选帧主频波动超过质量门限，请重拍或人工检查；不会自动降级写入', 'error');
+      return;
+    }
+    var cluster = candidateCluster(config);
     var selection = {
       target: config.target,
       adaptive: config.target < 10,
       qualityGate: 'standard',
       stabilityOk: stabilityOk,
-      referenceOnly: !stabilityOk && config.role === 'reference',
+        periodCluster: {
+          method: 'median-mad',
+        validCount: cluster.validCount,
+        clusterCount: cluster.clusterCount,
+        excludedCount: cluster.excludedCount,
+        centerPx: cluster.centerPx,
+        tolerancePx: cluster.tolerancePx
+        },
+      // 新记录按用户选择的角色写入；红光是待测目标，不是“仅参考”数据。
+      referenceOnly: false,
+      wavelengthRole: config.role === 'reference' ? 'target' : 'standard',
       cv: stats.cv,
       meanPx: stats.meanPx,
       sdPx: stats.sdPx,
@@ -879,6 +958,7 @@
     button.disabled = true;
     button.textContent = '正在写入…';
     var stored = 0;
+    var formalStored = 0;
     chosen.reduce(function (promise, item, index) {
       return promise.then(function () {
         return BP.sessions.addFrame(session.id, {
@@ -887,7 +967,7 @@
           name: 'video-best-' + String(index + 1).padStart(2, '0') + '.jpg',
           size: item.blob.size,
           deltaXPx: item.deltaXPx,
-          deltaXmm: isFinite(k) && k > 0 ? item.deltaXPx * k : null,
+          deltaXmm: item.deltaXmm,
           stripeCount: item.stripeCount,
           quality: item.visibility,
           source: item.source || 'live',
@@ -895,8 +975,15 @@
           capturedAt: item.timeMs,
           qualityScore: item.score,
           selection: selection,
+          localCalibration: item.localCalibration || null,
+          calibrationStatus: item.calibrationStatus || 'rejected',
+          sourcePixels: item.sourcePixels || null,
           analysis: item.analysis
-        }).then(function () { stored += 1; });
+        }).then(function (frame) {
+          stored += 1;
+          if (BP.frameCalibration &&
+              BP.frameCalibration.isFormalFrame(frame)) formalStored += 1;
+        });
       });
     }, Promise.resolve()).then(function () {
       clearCandidates();
@@ -909,6 +996,7 @@
       setBadge(remoteStream ? '已连接' : '未连接', remoteStream ? 'live' : '');
       setStatus('已将 ' + stored + ' 个最佳帧写入“' +
         (BP.sessions.ROLE_LABEL[config.role] || config.role) + '”；' +
+        '其中逐帧标定正式帧 ' + formalStored + ' 个；' +
         '目标 ' + config.target + ' 帧，单帧质量门限未降低', 'ready');
     }).catch(function (error) {
       setStatus('写入失败：' + (error.message || error), 'error');

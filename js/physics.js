@@ -28,26 +28,36 @@
     };
   }
 
-  /* ---------------- 2. 比值法（含色散修正）----------------------------
-   * λ_Na = λ_ref ·(Δx_Na/Δx_ref)·((n_Na-1)/(n_ref-1))
-   * 最后一项是棱镜色散修正：BK7 在 589.3 nm / 650 nm 处 n = 1.5168 / 1.5145，
-   * 修正量 (0.5168/0.5145 - 1) = +0.45%，漏掉它就是 +0.45% 的系统偏差。
+  /* ---------------- 2. 比值法（钠光标准 → 红光待测）--------------------
+   * λ_R = λ_Na ·(Δx_R/Δx_Na)·((n_R-1)/(n_Na-1))
+   * 方向：钠黄光 589.3 nm 为标准，红光为待测目标；色散项 (n_R-1)/(n_Na-1)
+   * 约 0.9955（BK7 在 650 nm / 589.3 nm 处 n = 1.5145 / 1.5168）。
+   * 旧的“以参考激光为基准解钠光”方向已废弃：若调用方仍传 lamRef，
+   * 直接抛错，避免继续沿用相反方向却看起来正常。
    */
   function wavelengthRatio(o) {
-    var dxNa = num(o.dxNaPx), dxRef = num(o.dxRefPx), lamRef = num(o.lamRef);
-    var nNa = num(o.nNa, 1.5168), nRef = num(o.nRef, 1.5145);
-    check(dxNa > 0 && dxRef > 0 && lamRef > 0 && nNa > 1 && nRef > 1,
-          '两个条纹间距、参考波长必须为正数，折射率必须大于 1');
-    var disp = (nNa - 1) / (nRef - 1);
-    var lam = lamRef * (dxNa / dxRef) * disp;
+    o = o || {};
+    if (o.lamRef !== undefined && o.lambdaStandardNm === undefined) {
+      throw new Error('比值法方向已改为“钠光标准→红光待测”：请改用 lambdaStandardNm / ' +
+                      'deltaXStandardPx / nStandard / deltaXTargetPx / nTarget 五个参数');
+    }
+    var dxStd = num(o.deltaXStandardPx);
+    var dxTgt = num(o.deltaXTargetPx);
+    var lamStd = num(o.lambdaStandardNm);
+    var nStd = num(o.nStandard, 1.5168);
+    var nTgt = num(o.nTarget, 1.5145);
+    check(dxStd > 0 && dxTgt > 0 && lamStd > 0 && nStd > 1 && nTgt > 1,
+          '标准/待测两组条纹间距与标准波长必须为正数，折射率必须大于 1');
+    var disp = (nTgt - 1) / (nStd - 1);
+    var lam = lamStd * (dxTgt / dxStd) * disp;
     return {
       value: lam,
       unit: 'nm',
-      dispersion: disp,                 // 1.0045 左右
-      relU: relU([uRel(o.uLamRef, lamRef), uRel(o.udxNa, dxNa),
-                  uRel(o.udxRef, dxRef),
-                  uRel(o.unNa, nNa), uRel(o.unRef, nRef)]),
-      formula: 'λ_Na = λ_ref·(Δx_Na/Δx_ref)·((n_Na-1)/(n_ref-1))'
+      dispersion: disp,                 // 0.99555 左右
+      relU: relU([uRel(o.uLambdaStandard, lamStd), uRel(o.udxStandard, dxStd),
+                  uRel(o.udxTarget, dxTgt),
+                  uRel(o.unStandard, nStd), uRel(o.unTarget, nTgt)]),
+      formula: 'λ_R = λ_Na·(Δx_R/Δx_Na)·((n_R-1)/(n_Na-1))'
     };
   }
 

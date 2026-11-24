@@ -6,25 +6,30 @@
   'use strict';
 
   var doc = global.document;
-  var STORAGE_KEY = 'bp.report.snapshot.v2';
+  var STORAGE_KEY = 'bp.report.snapshot.v3';
+  var STORAGE_VERSION = 3;
+  var DEFAULT_SCENARIO_ID = 'fresnel-sodium-red-2026-11-24';
+  var DEFAULT_SNAPSHOT_URL = 'data/reports/fresnel-sodium-red-2026-11-24.json';
   var SOURCE_LABEL = {
     measured: '实测',
     reportPreset: '报告预设',
     modelTrace: '模型追迹',
     manual: '手动输入',
     referenceOnly: '仅参考',
+    nominal: '标称值',
     missing: '缺失'
   };
   var CATEGORY_LABEL = {
     apparatus: '实验装置',
     sodium_fringe: '钠光条纹',
-    reference_fringe: '红光参考',
+    reference_fringe: '红光待测条纹',
     second_image: '二次成像',
     reticle: '分划板刻线',
     other_data: '原始记录'
   };
 
   var dataset = null;
+  var datasetSource = 'empty';
   var pendingDataset = null;
   var currentAuditFilter = 'all';
   var traceState = {
@@ -106,6 +111,9 @@
         auditFilter: currentAuditFilter,
         traceView: traceState.residual ? 'residual' : 'd-a'
       });
+      snapshot.storageVersion = STORAGE_VERSION;
+      snapshot.scenarioId = dataset.scenarioId || 'user-import-' + new Date().toISOString().slice(0, 10);
+      snapshot.dataset.scenarioId = snapshot.scenarioId;
       global.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch (error) {
       toast('本地保存失败：' + (error.message || error));
@@ -117,11 +125,47 @@
       var raw = global.localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       var parsed = JSON.parse(raw);
+      /*
+       * v2 快照可能对应旧的“以激光反算钠光”方向，不能覆盖本轮默认实测快照。
+       * v3 必须带明确 scenarioId，避免无来源的旧缓存被当作正式数据。
+       */
+      var scenarioId = parsed.scenarioId || (parsed.dataset && parsed.dataset.scenarioId);
+      if (parsed.storageVersion !== STORAGE_VERSION || !scenarioId) return null;
       var preview = global.BP.reportData.validateImport(parsed);
       return preview.ok ? preview.dataset : null;
     } catch (error) {
       return null;
     }
+  }
+
+  function demoRequested() {
+    try {
+      return new URLSearchParams(global.location.search).get('demo') === '1';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /*
+   * 仓库内默认快照只包含真实帧数、均值和标准差等聚合值，
+   * 不伪造 frames[]。加载后仍由 report-data 现算方法值与五步预算。
+   */
+  function loadDefaultSnapshot() {
+    return global.fetch(DEFAULT_SNAPSHOT_URL + '?v=20261124-r1', { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('默认快照 HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (snapshot) {
+        var scenarioId = snapshot.scenarioId ||
+          (snapshot.dataset && snapshot.dataset.scenarioId);
+        if (scenarioId !== DEFAULT_SCENARIO_ID) {
+          throw new Error('默认快照 scenarioId 不匹配');
+        }
+        var preview = global.BP.reportData.validateImport(snapshot);
+        if (!preview.ok) throw new Error('默认快照校验失败');
+        return preview.dataset;
+      });
   }
 
   function methodLabel(key) {
@@ -135,7 +179,7 @@
   function roleLabel(role) {
     return {
       sodium: '钠光条纹',
-      reference: '红光参考条纹',
+      reference: '红光待测条纹',
       no_lens: '无透镜条纹',
       with_lens: '加透镜条纹',
       calibration: '像素标定',
@@ -160,6 +204,7 @@
 
   function renderSummary() {
     var ratio = dataset.methods.ratio;
+    var legacyRatio = dataset.legacyConditional && dataset.legacyConditional.ratio;
     var sodium = dataset.roleStats.sodium;
     var reference = dataset.roleStats.reference;
     var trace = dataset.methods.trace;
@@ -173,26 +218,57 @@
 
     setText('generatedAt', localDate(dataset.meta && dataset.meta.generatedAt));
     setText('footerDate', localDate(new Date().toISOString()));
-    setText('heroValue', finite(ratio.valueNm) ? fmt(ratio.valueNm, 2) + ' nm' : '不可计算');
-    setText('heroUncertainty', finite(ratio.uNm)
-      ? 'u = ' + fmt(ratio.uNm, 2) + ' nm · ' + percent(ratio.relativeU)
-      : '条件输入不足，未合成误差');
-    setText('heroBias', finite(ratio.accuracy && ratio.accuracy.relativeBias)
-      ? fmt(ratio.accuracy.biasNm, 2) + ' nm（' + signedPercent(ratio.accuracy.relativeBias) + '）'
+    setText('datasetBadge', datasetSource === 'localSnapshot'
+      ? '本机导入快照'
+      : (datasetSource === 'defaultSnapshot'
+        ? '2026-11-24 实测快照'
+        : (datasetSource === 'demo' ? '历史条件情景（demo）' : '尚未导入实测数据')));
+    var hero = finite(ratio.valueNm) ? ratio : legacyRatio;
+    var budget = ratio.uncertainty || (legacyRatio && legacyRatio.uncertainty);
+    setText('heroValue', finite(ratio.valueNm) && budget
+      ? budget.expression
+      : (finite(hero && hero.valueNm)
+        ? (finite(ratio.valueNm) ? '' : '条件 ') + fmt(hero.valueNm, 2) + ' nm'
+        : '不可计算'));
+    setText('heroUncertainty', finite(ratio.valueNm) && budget
+      ? 'U_r,95 = ' + fmt(budget.ur95Percent, 2) + '%（P=95%，仅 A 类重复性项）'
+      : (finite(hero && hero.uNm)
+        ? 'u = ' + fmt(hero.uNm, 2) + ' nm · ' + percent(hero.relativeU) +
+          (finite(ratio.valueNm) ? '' : '（旧像素口径，待逐帧标定）')
+        : '条件输入不足，未合成误差'));
+    setText('heroBias', finite(hero && hero.accuracy && hero.accuracy.relativeBias)
+      ? fmt(hero.accuracy.biasNm, 2) + ' nm（' + signedPercent(hero.accuracy.relativeBias) +
+        '，基准为标称 650 nm）'
       : '—');
-    setText('heroCompleteness', completed + ' / 3 条方法可算');
+    setText('heroCompleteness', completed + ' / 3 条正式方法可算');
     setText('heroStatus',
-      geometryStats
+      datasetSource === 'defaultSnapshot'
+        ? '实测条纹 · 589.3 nm 与折射率来源已标注'
+        : (geometryStats
         ? (trace.sameSource ? '几何实测 · 追迹同源' : '几何实测 · 条件核验')
-        : (reference.referenceOnly ? '参考性条件结论' : '待交叉核验'));
+        : (reference.referenceOnly ? '条件情景 · 正式逐帧标定待补' : '待交叉核验')));
 
     var lead = '已按 sodium、reference、no_lens、with_lens 等角色隔离真实识别结果。';
-    if (sodium.n && reference.n) {
-      lead += ' 钠光 ' + sodium.n + ' 帧给出 Δx=' + fmt(sodium.meanPx, 3) +
-        ' px；红光参考 ' + reference.n + ' 帧给出 Δx=' + fmt(reference.meanPx, 3) +
-        ' px。比值法在报告预设波长与折射率下得到 ' +
-        methodValueText(ratio) + '，相对 589.3 nm 为 ' +
+    var sodiumEvidence = sodium.nEvidence || sodium.nPx || sodium.n || 0;
+    var referenceEvidence = reference.nEvidence || reference.nPx || reference.n || 0;
+    if (sodium.nMm && reference.nMm) {
+      lead += ' 钠光标准 ' + sodium.nMm + ' 个正式帧给出 Δx=' + fmt(sodium.meanMm, 6) +
+        ' mm；红光待测 ' + reference.nMm + ' 个正式帧给出 Δx=' + fmt(reference.meanMm, 6) +
+        ' mm。比值法得到 ' + methodValueText(ratio) + '；与标称 650 nm 的相对差为 ' +
         signedPercent(ratio.accuracy && ratio.accuracy.relativeBias) + '。';
+    } else if (sodiumEvidence && referenceEvidence) {
+      lead += ' 钠光 ' + sodiumEvidence + ' 帧像素证据给出 Δx=' + fmt(sodium.meanPx, 3) +
+        ' px；红光待测 ' + referenceEvidence + ' 帧像素证据给出 Δx=' + fmt(reference.meanPx, 3) +
+        ' px。比值法在显式报告预设波长与折射率下得到 ' +
+        methodValueText(ratio) + '，与标称 650 nm 的相对差为 ' +
+        signedPercent(ratio.accuracy && ratio.accuracy.relativeBias) + '。';
+    }
+    if (!finite(ratio.valueNm) && finite(legacyRatio && legacyRatio.valueNm)) {
+      lead = lead.replace(
+        '比值法在显式报告预设波长与折射率下得到 不可计算，与标称 650 nm 的相对差为 —。',
+        '正式比值法因缺少双角色逐帧同框标定而不可计算；旧全局像素口径仅作条件情景，给出 ' +
+          methodValueText(legacyRatio) + '。'
+      );
     }
     if (geometryStats) {
       lead += ' 二次成像记录给出 d₁=' + fmt(geometryStats.d1Mm, 4) +
@@ -203,7 +279,7 @@
         ' mm，并反算 A_eff=' + fmt(geometryStats.Adeg, 5) + '°。';
     }
     if (reference.referenceOnly) {
-      lead += ' 红光片段帧数有限且波动偏大，结论只用于验证识别链路与条件误差，不作为正式高精度实验值。';
+      lead += ' 该记录保留了旧版 referenceOnly 语义；新版红光导入已改为待测目标，需重新确认后再比较。';
     }
     setText('summaryLead', lead);
 
@@ -217,18 +293,20 @@
 
     var metrics = [
       {
-        label: '钠光实测',
-        value: String(sodium.n || 0),
-        sub: finite(sodium.cv)
-          ? '帧 · Δx ' + fmt(sodium.meanPx, 3) + ' px · CV ' + percent(sodium.cv)
-          : '没有有效识别'
+        label: '钠光像素证据',
+        value: String(sodium.nEvidence || sodium.nPx || sodium.n || 0),
+        sub: sodium.nMm
+          ? '正式帧 · Δx ' + fmt(sodium.meanMm, 4) + ' mm'
+          : 'Δx ' + fmt(sodium.meanPx, 3) + ' px · 待逐帧标定',
       },
       {
-        label: '红光参考',
-        value: String(reference.n || 0),
+        label: '红光待测证据',
+        value: String(reference.nEvidence || reference.nPx || reference.n || 0),
         sub: reference.referenceOnly
-          ? '帧 · Δx ' + fmt(reference.meanPx, 3) + ' px · 仅参考'
-          : '帧 · 多帧参考'
+          ? '帧 · Δx ' + fmt(reference.meanPx, 3) + ' px · 旧记录仅参考'
+          : (reference.nMm
+            ? '正式帧 · Δx ' + fmt(reference.meanMm, 6) + ' mm'
+            : '帧 · Δx ' + fmt(reference.meanPx, 3) + ' px')
       },
       {
         label: '虚光源间距 d',
@@ -269,47 +347,38 @@
     }
   }
 
+  /* 单主方法：只渲染钠光标准测红光一张卡；追迹/放大率/二次成像降为辅助说明。 */
   function renderMethods() {
     var container = $('methodCards');
-    if (!container) return;
-    var order = ['ratio', 'trace', 'magnification'];
-    container.innerHTML = order.map(function (key, index) {
-      var method = dataset.methods[key] || {};
+    var method = dataset.methods.ratio || {};
+    if (container) {
       var isMissing = !finite(method.valueNm);
       var bias = method.accuracy && finite(method.accuracy.relativeBias)
-        ? '相对 589.3 nm：' + fmt(method.accuracy.biasNm, 2) + ' nm（' +
+        ? '与理论/标称 650 nm 比较：' + fmt(method.accuracy.biasNm, 2) + ' nm（' +
           signedPercent(method.accuracy.relativeBias) + '）'
-        : (isMissing ? '未生成数值' : '准确度输入不足');
+        : (isMissing ? '未生成数值' : '比较输入不足');
       var missingHtml = (method.missing || []).map(function (item) {
         return '<li>' + escapeHtml(roleLabel(item.role)) + '：' + escapeHtml(item.reason) + '</li>';
       }).join('');
-      return '<article class="method-card">' +
-        '<div class="method-card-head"><span class="method-index">0' + (index + 1) +
-        '</span>' + sourceChip(method.sourceType || 'missing') + '</div>' +
-        '<h3>' + escapeHtml(methodLabel(key)) + '</h3>' +
+      container.innerHTML =
+        '<article class="method-card method-card-primary">' +
+        '<div class="method-card-head"><span class="method-index">主</span>' +
+        sourceChip(method.sourceType || 'missing') + '</div>' +
+        '<h3>' + escapeHtml(methodLabel('ratio')) + '</h3>' +
         '<p class="method-value' + (isMissing ? ' is-missing' : '') + '">' +
         escapeHtml(methodValueText(method)) + '</p>' +
         '<div class="method-formula">' + escapeHtml(method.formula || '—') +
         '<br><span>' + escapeHtml(methodStatus(method)) + ' · ' + escapeHtml(bias) + '</span></div>' +
-        '<p class="method-purpose">' + escapeHtml(global.BP.reportData.METHOD_ROLES[key]) + '</p>' +
+        '<p class="method-purpose">' + escapeHtml(global.BP.reportData.METHOD_ROLES.ratio) + '</p>' +
         (method.note ? '<p class="method-note">' + escapeHtml(method.note) + '</p>' : '') +
         (missingHtml ? '<ul class="missing-list">' + missingHtml + '</ul>' : '') +
-        '</article>';
-    }).join('');
-
-    var historical = dataset.historicalSimulation;
-    var cells = [
-      ['比值法', historical.ratio],
-      ['横向放大率法', historical.magnification],
-      ['光线追迹法', historical.trace],
-      ['三路径合成', historical.combined]
-    ];
-    var table = $('historicalTable');
-    if (table) {
-      table.innerHTML = cells.map(function (item) {
-        return '<div class="history-cell"><span>' + escapeHtml(item[0]) + '</span><strong>' +
-          fmt(item[1].valueNm, 2) + ' ± ' + fmt(item[1].uNm, 2) + ' nm</strong></div>';
-      }).join('');
+        '</article>' +
+        '<aside class="method-aside">' +
+        '<h3>辅助工具（不参与最终波长与误差合成）</h3>' +
+        '<p>光线追迹用于校核傍轴公式 d = 2a(n−1)A 的适用偏差，可由 a、A、n 给出虚光源间距；' +
+        '横向放大率法与二次成像（d = √(d₁d₂)，D = a + z₂）只提供 d 的辅助几何量。' +
+        '本方法用同一光路的条纹间距比直接消去 d、D 与像素比例，因此不需要再由这两条路径生成正式波长结论。</p>' +
+        '</aside>';
     }
   }
 
@@ -386,6 +455,10 @@
 
   function renderErrors() {
     var ratio = dataset.methods.ratio;
+    if (!finite(ratio.valueNm) && dataset.legacyConditional &&
+        finite(dataset.legacyConditional.ratio.valueNm)) {
+      ratio = dataset.legacyConditional.ratio;
+    }
     var terms = ratio.terms || [];
     var max = Math.max.apply(null, terms.map(function (term) {
       return finite(term.relU) ? Math.abs(term.relU) : 0;
@@ -408,8 +481,9 @@
         });
       });
     }
+    var formalRatio = dataset.methods.ratio;
     setText('ratioErrorTotal', finite(ratio.relativeU)
-      ? 'u(λ)/λ = ' + percent(ratio.relativeU)
+      ? (finite(formalRatio.valueNm) ? '' : '条件 ') + 'u(λ)/λ = ' + percent(ratio.relativeU)
       : '不可合成');
     setText('errorFormula', ratio.formula || '—');
     var sodium = dataset.roleStats.sodium;
@@ -423,13 +497,6 @@
         ? '。几何量：d₁/d₂ 各 3 组，d 的相对均值标准误差 ' +
           percent(dataset.actualGeometry.stats.relativeU_d) + '。'
         : '。'));
-    var historical = dataset.historicalSimulation.combined;
-    setText('consistencyText',
-      '历史仿真三路径 χ²=' + fmt(historical.chi2, 4) + '，ν=' + historical.dof +
-      '，临界 ' + fmt(historical.critical95, 3) + '，结论：' +
-      (historical.consistent ? '在 95% 水平一致' : '不一致') +
-      '。本轮比值法有双视频条件结果；放大率法与追迹法虽已代入本轮几何量，' +
-      '但仍受 k 预设限制，追迹还与放大率法同源，不能把历史 χ² 冒充本轮一致性。');
   }
 
   function traceDataRange() {
@@ -760,15 +827,135 @@
       });
   }
 
+  function esc(value) {
+    return String(value === null || value === undefined ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function stepsTable(rows) {
+    return '<table class="data-table"><tbody>' + rows.map(function (row) {
+      var cls = row.note === true ? ' class="note-row"' : '';
+      return '<tr' + cls + '><th scope="row">' + esc(row[0]) + '</th><td>' + row[1] + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  }
+
+  /* A–F 结果区：五步 A 类预算 + 传播公式 + 标称比较 + 来源审计。 */
+  function renderSteps() {
+    var ratio = dataset.methods && dataset.methods.ratio;
+    var legacyRatio = dataset.legacyConditional && dataset.legacyConditional.ratio;
+    var budget = (ratio && ratio.uncertainty) || (legacyRatio && legacyRatio.uncertainty);
+    var sodium = dataset.roleStats && dataset.roleStats.sodium;
+    var target = dataset.roleStats && dataset.roleStats.reference;
+
+    if (!budget) {
+      setText('stepsLead', '比值法缺少钠光或红光正式帧，五步预算暂不可计算。');
+      ['stepsData', 'stepsTable', 'stepsTerms', 'stepsResult', 'stepsCompare', 'stepsAudit'].forEach(function (id) {
+        var el = $(id);
+        if (el) el.innerHTML = '<p class="muted">待补数据</p>';
+      });
+      setText('stepsFormula', 'λ_R = λ_Na·(Δx_R/Δx_Na)·[(n_R−1)/(n_Na−1)]');
+      return;
+    }
+
+    setText('stepsLead',
+      '以钠黄光标准波长 589.3 nm 为标准，用同一光路的条纹间距比与棱镜色散修正求红光波长；' +
+      '下列 A–F 与 Word 正文同序。');
+
+    /* A. 条纹数据摘要 */
+    var sodiumStripes = sodium.stripeCountStatus === 'pending' ||
+      !finite(sodium.meanStripeCount)
+      ? '条纹数待补'
+      : '平均 ' + fmt(sodium.meanStripeCount, 1) + ' 条条纹';
+    var targetStripes = target.stripeCountStatus === 'pending' ||
+      !finite(target.meanStripeCount)
+      ? '条纹数待补'
+      : '平均 ' + fmt(target.meanStripeCount, 1) + ' 条条纹';
+    var dataRows = [
+      ['钠光条纹 Δx_Na', fmt(budget.standard.mean, 6) + ' mm（' + budget.standard.n + ' 帧，s = ' +
+        fmt(budget.standard.sd, 6) + ' mm；' + sodiumStripes + '）'],
+      ['红光条纹 Δx_R', fmt(budget.target.mean, 6) + ' mm（' + budget.target.n + ' 帧，s = ' +
+        fmt(budget.target.sd, 6) + ' mm；' + targetStripes + '）'],
+      ['条纹间距比 Δx_R/Δx_Na', fmt(budget.ratio, 6)],
+      ['折射率（N-BK7 假设）', 'n_Na = ' + fmt(budget.terms[4].value, 4) + '，n_R = ' + fmt(budget.terms[3].value, 4)]
+    ];
+    $('stepsData').innerHTML = stepsTable(dataRows);
+
+    /* B. 五步 */
+    var stepRows = [
+      ['1 测量值', 'λ_R = 589.3 × (' + fmt(budget.target.mean, 6) + '/' + fmt(budget.standard.mean, 6) +
+        ') × (' + fmt(budget.terms[3].value - 1, 4) + '/' + fmt(budget.terms[4].value - 1, 4) + ') = ' +
+        fmt(budget.valueNm, 2) + ' nm'],
+      ['2 A 类不确定度', 'u_A(Δx_R)/Δx_R = ' + fmt(budget.uATargetRel * 100, 4) + '%，' +
+        'u_A(Δx_Na)/Δx_Na = ' + fmt(budget.uAStandardRel * 100, 4) + '%；合并 ' +
+        fmt(budget.uARel * 100, 4) + '%，u_A(λ_R) ≈ ' + fmt(budget.uANm, 2) + ' nm'],
+      ['3 相对不确定度', 'U_r,95 = ' + fmt(budget.tFactor, 2) + ' × ' + fmt(budget.uARel * 100, 4) +
+        '% = ' + fmt(budget.ur95Percent, 2) + '%（ν_eff ≈ ' + Math.round(budget.nuEff) +
+        '，t ≈ ' + fmt(budget.tFactor, 2) + '；仅 A 类重复性项）'],
+      ['4 绝对不确定度', 'U_95 = ' + fmt(budget.u95Nm, 3) + ' nm → 进位 ' + fmt(budget.u95Rounded, 1) + ' nm'],
+      ['5 结果表达式', budget.expression + '，U_r = ' + fmt(budget.ur95Percent, 2) + '%（P=95%，仅 A 类重复性项）']
+    ];
+    $('stepsTable').innerHTML = stepsTable(stepRows);
+
+    /* C. 传播公式 + 五项 */
+    setText('stepsFormula',
+      'U_r = √{ [u(Δx_R)/Δx_R]² + [u(Δx_Na)/Δx_Na]² + [u(λ_Na)/λ_Na]² + ' +
+      '[u(n_R)/(n_R−1)]² + [u(n_Na)/(n_Na−1)]² }');
+    var termRows = budget.terms.map(function (term) {
+      if (!term.quantified) {
+        return [term.label, '<span class="unquantified">未定量</span> · ' + esc(term.source) +
+          '（' + esc(String(term.note || '').replace('未定量：', '')) + '）'];
+      }
+      return [term.label, fmt(term.relU * 100, 4) + '% · ' + esc(term.source)];
+    });
+    $('stepsTerms').innerHTML = stepsTable(termRows);
+
+    /* D. 最终结果 */
+    $('stepsResult').innerHTML =
+      '<p class="result-value">λ_R = ' + esc(budget.expression) + '</p>' +
+      '<p class="result-meta">U_r = ' + fmt(budget.ur95Percent, 2) + '%（P=95%，仅 A 类重复性项）· ν_eff ≈ ' +
+      Math.round(budget.nuEff) + '，t ≈ ' + fmt(budget.tFactor, 2) + '</p>' +
+      '<p class="result-meta">单帧重复性约 ' + fmt(budget.singleFrameRelative * 100, 2) + '%（约 ' +
+      fmt(budget.singleFrameNm, 1) + ' nm，1σ）；它与均值扩展不确定度是两个口径，不合并。</p>';
+
+    /* E. 与 650 nm 比较 */
+    var cmp = budget.comparison;
+    if (cmp) {
+      $('stepsCompare').innerHTML = stepsTable([
+        ['理论/标称值 λ₀', fmt(cmp.nominalNm, 2) + ' nm（激光器标称，未独立校准）'],
+        ['Δλ = λ_R − λ₀', cmp.deltaText + '（' + (cmp.deltaNm >= 0 ? '+' : '') + fmt(cmp.deltaNm, 2) + ' nm）'],
+        ['E_r', (cmp.relativeDiffPercent >= 0 ? '+' : '') + fmt(cmp.relativeDiffPercent, 2) + '%'],
+        ['写法', esc(cmp.basis)]
+      ]);
+    }
+
+    /* F. 来源审计 */
+    var items = (ratio.sourceItems || []).map(function (item) {
+      return [(item.label || item.field || item.key) + '（' + item.sourceType + '）',
+        esc(item.sourceDetail || item.source || '')];
+    });
+    items.push(['三项 B 类', '<span class="unquantified">未定量</span>：u(λ_Na)、u(n_R)、u(n_Na)；' +
+      '没有有效来源，不以 0 补齐，也不并入 ' + fmt(budget.ur95Percent, 2) +
+      '%，故该值不是完整实验总不确定度。']);
+    $('stepsAudit').innerHTML = stepsTable(items);
+  }
+
   function renderDataset() {
     if (!dataset) return;
     renderSummary();
     renderGeometry();
     renderMethods();
     renderErrors();
+    renderSteps();
     renderTrace();
     renderAudit();
     renderGallery();
+  }
+
+  function activateDataset(nextDataset, source) {
+    dataset = nextDataset;
+    datasetSource = source;
+    renderDataset();
+    loadManifest();
   }
 
   function renderImportPreview(preview) {
@@ -780,7 +967,10 @@
     var roleCounts = preview.dataset && preview.dataset.roleStats
       ? ['sodium', 'reference', 'no_lens', 'with_lens']
         .map(function (role) {
-          return roleLabel(role) + ' ' + (preview.dataset.roleStats[role].n || 0) + ' 帧';
+          var stat = preview.dataset.roleStats[role];
+          var evidence = stat.nEvidence || stat.nPx || stat.n || 0;
+          var formal = stat.nMm || stat.n || 0;
+          return roleLabel(role) + ' ' + evidence + ' 帧证据 / ' + formal + ' 帧正式';
         }).join(' · ')
       : '没有可用角色摘要';
     var geometryText = preview.dataset && preview.dataset.actualGeometry
@@ -859,6 +1049,7 @@
   function confirmImport() {
     if (!pendingDataset) return;
     dataset = pendingDataset;
+    datasetSource = 'localSnapshot';
     pendingDataset = null;
     currentAuditFilter = 'all';
     traceState.hoverIndex = -1;
@@ -891,7 +1082,6 @@
     anchor.click();
     anchor.remove();
     global.setTimeout(function () { URL.revokeObjectURL(url); }, 1200);
-    saveLocal();
     toast('已导出 bp.report/1 快照');
   }
 
@@ -958,10 +1148,23 @@
   }
 
   function init() {
-    dataset = restoreLocal() || global.BP.reportData.createDefaultDataset();
     bindUi();
-    renderDataset();
-    loadManifest();
+    if (demoRequested()) {
+      activateDataset(global.BP.reportData.createDefaultDataset(), 'demo');
+      return;
+    }
+    var localDataset = restoreLocal();
+    if (localDataset) {
+      activateDataset(localDataset, 'localSnapshot');
+      return;
+    }
+    loadDefaultSnapshot()
+      .then(function (defaultDataset) {
+        activateDataset(defaultDataset, 'defaultSnapshot');
+      })
+      .catch(function () {
+        activateDataset(global.BP.reportData.createEmptyDataset(), 'empty');
+      });
   }
 
   if (doc) {
@@ -973,6 +1176,7 @@
   global.BP.pages = global.BP.pages || {};
   global.BP.pages.report = {
     getDataset: function () { return dataset; },
+    getDatasetSource: function () { return datasetSource; },
     openImportPreview: function (record) {
       var preview = global.BP.reportData.validateImport(record);
       openImportDialog(preview);

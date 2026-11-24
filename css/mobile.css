@@ -144,6 +144,7 @@ button:disabled { opacity:0.5; cursor:not-allowed; }
   background: rgba(255,255,255,0.08);
 }
 .role-chip.is-done { color: #86efac; border: 1px solid rgba(134, 239, 172, 0.45); }
+.role-chip.is-evidence { color: #fde68a; border: 1px solid rgba(253, 230, 138, 0.42); }
 .role-chip.is-missing { color: #fca5a5; border: 1px solid rgba(252, 165, 165, 0.4); }
 .frame-gallery {
   display: grid;

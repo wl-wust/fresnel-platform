@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>双棱镜干涉实验 · 手机端</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2316213e'/%3E%3Cpath d='M6 22 L16 8 L26 22 Z' fill='none' stroke='%2364b5f6' stroke-width='2'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/mobile.css?v=9e0c40e">
-<link rel="stylesheet" href="css/app-responsive.css?v=9e0c40e">
+<link rel="stylesheet" href="css/mobile.css?v=20261117-r3">
+<link rel="stylesheet" href="css/app-responsive.css?v=20261117-r3">
 </head>
 <body>
 <section id="streamPage" class="stream-page" hidden aria-label="手机视频推流">
@@ -123,8 +123,8 @@
       <button class="btn-secondary" onclick="detectReticle()">重新自动识别</button>
       <canvas id="reticleCanvas" width="300" height="200" style="width:100%;max-width:360px;background:#111;border-radius:8px"></canvas>
       <div class="param-row"><label>识别/标定结果</label><span id="retPix">—</span></div>
-      <div class="param-row"><label for="retL">相邻刻线实际间距 (mm)</label><input type="number" id="retL" value="5" step="0.01"></div>
-      <p class="hint">默认 5 mm 是报告表预设，必须按实际分划板核对；留用时会明确标注“预设，待核实”。</p>
+      <div class="param-row"><label for="retL">相邻刻线实际间距 (mm)</label><input type="number" id="retL" value="1" step="0.01"></div>
+      <p class="hint">相邻刻线实际间距已按本次分划板确认为 1.00 mm；改动后会切换为“手动输入”。</p>
       <button class="btn-calc" onclick="calcReticle()">计算并保存 k</button>
     </div>
 
@@ -234,7 +234,7 @@
     <div class="guide-card">
       <h4>公式</h4>
       <p class="formula">λ = d × Δx / D</p>
-      <p class="formula">λ_Na = λ_ref × (Δx_Na / Δx_ref) × ((n_Na−1)/(n_ref−1))</p>
+      <p class="formula">λ_R = λ_Na × (Δx_R / Δx_Na) × ((n_R−1)/(n_Na−1))</p>
     </div>
   </div>
 
@@ -242,18 +242,19 @@
 
 <div id="bpLoading" class="loading" style="display:none"><div class="spinner"></div><p>处理中...</p></div>
 
-<script src="js/physics.js?v=9e0c40e"></script>
-<script src="js/core/fmt.js?v=9e0c40e"></script>
-<script src="js/core/ui.js?v=9e0c40e"></script>
-<script src="js/core/store.js?v=9e0c40e"></script>
-<script src="js/core/nbk7.js?v=9e0c40e"></script>
-<script src="js/core/sessions.js?v=9e0c40e"></script>
-<script src="js/core/fringe.js?v=9e0c40e"></script>
-<script src="js/core/session-data.js?v=9e0c40e"></script>
-<script src="lan-config.js?v=9e0c40e"></script>
-<script src="js/live/lan-signaling.js?v=9e0c40e"></script>
-<script src="js/pages/mobile.js?v=9e0c40e"></script>
-<script src="vendor/peerjs.min.js?v=9e0c40e"></script>
-<script src="js/pages/mobile-stream.js?v=9e0c40e"></script>
+<script src="js/physics.js?v=20261117-r3"></script>
+<script src="js/core/fmt.js?v=20261117-r3"></script>
+<script src="js/core/ui.js?v=20261117-r3"></script>
+<script src="js/core/store.js?v=20261117-r3"></script>
+<script src="js/core/nbk7.js?v=20261117-r3"></script>
+<script src="js/core/frame-calibration.js?v=20261124-r2"></script>
+<script src="js/core/sessions.js?v=20261117-r3"></script>
+<script src="js/core/fringe.js?v=20261117-r3"></script>
+<script src="js/core/session-data.js?v=20261117-r3"></script>
+<script src="lan-config.js?v=20261117-r3"></script>
+<script src="js/live/lan-signaling.js?v=20261117-r3"></script>
+<script src="js/pages/mobile.js?v=20261117-r3"></script>
+<script src="vendor/peerjs.min.js?v=20261117-r3"></script>
+<script src="js/pages/mobile-stream.js?v=20261117-r3"></script>
 </body>
 </html>

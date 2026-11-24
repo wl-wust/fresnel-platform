@@ -2,6 +2,8 @@
 
 import json
 import os
+import shutil
+import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -10,6 +12,7 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get("LAN_BASE", "https://localhost:52224")
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "output"
+sys.stdout.reconfigure(encoding="utf-8")
 
 VIDEOS = {
     "sodium": Path(os.environ.get("SODIUM_VIDEO", r"E:\qq\VID_20261103_152203.mp4")),
@@ -26,6 +29,30 @@ RECOVERY_VIDEOS = {
     )),
 }
 REFERENCE_GAP = float(os.environ.get("REFERENCE_GAP", "0"))
+EXPECTED_REFERENCE_TARGET = int(os.environ.get("EXPECTED_REFERENCE_TARGET", "5"))
+EXPECTED_REFERENCE_EVIDENCE = int(os.environ.get(
+    "EXPECTED_REFERENCE_EVIDENCE",
+    str(EXPECTED_REFERENCE_TARGET),
+))
+CHROME = find_chrome()
+
+
+def find_chrome() -> Path:
+    """按 CHROME_PATH → PATH → 默认安装目录顺序定位 Chrome。"""
+    override = os.environ.get("CHROME_PATH")
+    if override:
+        return Path(override).expanduser()
+    for name in ("chrome", "chrome.exe", "google-chrome", "google-chrome-stable"):
+        found = shutil.which(name)
+        if found:
+            return Path(found)
+    for env_name in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+        root = os.environ.get(env_name)
+        if root:
+            candidate = Path(root) / "Google/Chrome/Application/chrome.exe"
+            if candidate.exists():
+                return candidate
+    raise SystemExit("未找到 Chrome：请设置 CHROME_PATH 环境变量")
 
 
 def wait_import_done(page):
@@ -63,6 +90,20 @@ def import_as(page, role, video):
 
 def confirm_and_read_session(page, role):
     """确认候选帧写入当前角色，并读取持久化会话统计。"""
+    button = page.locator("#videoConfirmButton")
+    if not button.is_enabled():
+        # 保留现场信息，避免只看到超时却不知道缺几帧、缺哪一类证据。
+        diagnostic = {
+            "role": role,
+            "stats": page.locator("#videoCandidateStats").inner_text(),
+            "status": page.locator("#videoLiveStatus").inner_text(),
+            "cards": page.locator(".video-candidate").all_inner_texts(),
+        }
+        page.screenshot(path=str(OUTPUT / ("video-import-" + role + "-insufficient.png")),
+                        full_page=True)
+        print(json.dumps(diagnostic, ensure_ascii=False, indent=2))
+        raise AssertionError("候选帧不足或未达到确认条件：" + json.dumps(
+            diagnostic, ensure_ascii=False))
     page.click("#videoConfirmButton")
     page.wait_for_function(
         "() => document.querySelector('#videoLiveStatus').textContent.includes('已将')",
@@ -79,16 +120,25 @@ def confirm_and_read_session(page, role):
             method: session.method,
             role,
             n: stat.n,
+            nEvidence: stat.nEvidence,
+            nPx: stat.nPx,
+            nMm: stat.nMm,
             meanPx: stat.meanPx,
             meanStripeCount: stat.meanStripeCount,
             frames: frames.map((frame) => ({
               deltaXPx: frame.deltaXPx,
+              deltaXmm: frame.deltaXmm,
               stripeCount: frame.stripeCount,
               source: frame.source,
+              capturedAt: frame.capturedAt,
               target: frame.selection && frame.selection.target,
               qualityGate: frame.selection && frame.selection.qualityGate,
               stabilityOk: frame.selection && frame.selection.stabilityOk,
               referenceOnly: frame.selection && frame.selection.referenceOnly,
+              wavelengthRole: frame.selection && frame.selection.wavelengthRole,
+              periodCluster: frame.selection && frame.selection.periodCluster,
+              calibrationStatus: frame.calibrationStatus,
+              localCalibration: frame.localCalibration,
             })),
           };
         }
@@ -105,8 +155,11 @@ def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     errors = []
     with sync_playwright() as playwright:
+        if not CHROME.exists():
+            raise SystemExit("缺少本机 Chrome：" + str(CHROME))
         browser = playwright.chromium.launch(
             headless=True,
+            executable_path=str(CHROME),
             args=["--ignore-certificate-errors"],
         )
         context = browser.new_context(
@@ -169,30 +222,54 @@ def main():
             },
             "pageErrors": errors,
         }
+        # 保留完整实测摘要，便于定位失败帧；该文件只用于验证，不进入报告数据。
+        (OUTPUT / "video-import-browser-result.json").write_text(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         print(json.dumps(result, ensure_ascii=False, indent=2))
         assert not errors, errors
         assert reference["cards"], "红光参考视频没有产生有效候选帧"
         assert sodium["cards"], "钠光视频没有产生有效候选帧"
-        assert reference["target"] == "5", "短片应显式切换为 5 帧参考目标"
-        assert "目标 5" in reference["stats"], "短片目标策略未显示在候选摘要中"
-        assert reference_session["n"] == 5, "红光参考应写入 5 帧"
-        assert sodium_session["n"] == 20, "钠光应写入 20 帧"
+        assert int(reference["target"]) == EXPECTED_REFERENCE_TARGET, \
+            "红光目标帧数与预期不一致"
+        assert "稳定周期候选" in reference["stats"], "候选摘要应显示稳健周期簇"
+        assert reference_session["nEvidence"] == EXPECTED_REFERENCE_EVIDENCE, \
+            "红光参考应按预期帧数写入"
+        assert sodium_session["nEvidence"] == 20, "钠光应写入 20 帧"
+        assert reference_session["nMm"] == 0 and sodium_session["nMm"] == 0, \
+            "未确认同帧刻线时不得生成正式毫米值"
         assert reference_session["meanStripeCount"] > 0, "红光应记录可见条纹数"
         assert sodium_session["meanStripeCount"] > 0, "钠光应记录可见条纹数"
         assert all(frame["qualityGate"] == "standard" for frame in reference_session["frames"]), \
             "短片不得降低单帧质量门限"
-        assert all(frame["stabilityOk"] is False for frame in reference_session["frames"]), \
-            "红光波动超标应保留稳定性判定"
-        assert all(frame["referenceOnly"] is True for frame in reference_session["frames"]), \
-            "红光不稳定数据应明确标为仅参考"
+        # 长片段与短片段可能得到不同稳定性结论；断言必须跟随页面真实状态，
+        # 不能把某一轮“红光仅参考”的旧结论写死。
+        reference_stable = (
+            "主频稳定" in reference["status"]
+            and "波动偏大" not in reference["stats"]
+        )
+        assert all(
+            frame["stabilityOk"] is reference_stable
+            for frame in reference_session["frames"]
+        ), "红光帧稳定性判定应与本轮页面状态一致"
+        assert all(frame["referenceOnly"] is False for frame in reference_session["frames"]), \
+            "新导入红光应作为待测目标，旧 referenceOnly 记录才保持原语义"
+        assert all(frame["wavelengthRole"] == "target" for frame in reference_session["frames"]), \
+            "红光帧应明确标记为 wavelengthRole=target"
+        assert all(
+            frame["periodCluster"]
+            and frame["periodCluster"]["method"] == "median-mad"
+            for frame in reference_session["frames"]
+        ), "红光帧应保存中位数-MAD 稳健簇来源"
         assert form["sodiumAuto"] == "1" and form["referenceAuto"] == "1", \
             "两种角色应自动填入对应方法"
-        assert "有效帧" in form["summary"] and "平均" in form["summary"], \
-            "来源摘要应显示有效帧与条纹数"
+        assert "证据帧" in form["summary"] and "平均" in form["summary"], \
+            "来源摘要应显示证据帧与条纹数"
         assert recovery_short["target"] == "5", "短片应自动采用 5 帧参考目标"
         assert recovery_long["target"] == "20", "长片应恢复上一次显式 20 帧目标"
-        assert "恢复上次显式目标" in recovery_long["status"], \
-            "长片状态应说明目标帧数恢复来源"
+        assert "/ 目标 20" in recovery_long["stats"], \
+            "长片摘要应保留恢复后的 20 帧目标"
         browser.close()
 
 

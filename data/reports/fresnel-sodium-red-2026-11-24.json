@@ -1,0 +1,136 @@
+{
+  "version": "bp.report/1",
+  "scenarioId": "fresnel-sodium-red-2026-11-24",
+  "scenarioLabel": "2026-11-24 钠光标准测红光实测快照",
+  "generatedAt": "2026-11-24T00:00:00+08:00",
+  "sourceFiles": {
+    "sodium": "sodium-2026-11-24.mp4",
+    "reference": "reference-2026-11-24.mp4"
+  },
+  "stripeCountStatus": "pending",
+  "methodSettings": {
+    "auditFilter": "all",
+    "traceView": "d-a"
+  },
+  "dataset": {
+    "schema": "bp.dataset/1",
+    "scenarioId": "fresnel-sodium-red-2026-11-24",
+    "scenarioLabel": "2026-11-24 钠光标准测红光实测快照",
+    "useReportPreset": false,
+    "meta": {
+      "title": "菲涅耳双棱镜：钠光标准测红光",
+      "generatedAt": "2026-11-24T00:00:00+08:00",
+      "source": "两段实验视频的真实逐帧识别汇总",
+      "experimentDate": "2026-11-24"
+    },
+    "sourceFiles": {
+      "sodium": "sodium-2026-11-24.mp4",
+      "reference": "reference-2026-11-24.mp4"
+    },
+    "sessions": [
+      {
+        "schema": "bp.session/2",
+        "id": "fresnel-sodium-red-2026-11-24",
+        "method": "ratio",
+        "title": "钠光标准测红光",
+        "created": "2026-11-24T00:00:00+08:00",
+        "calibration": null,
+        "params": {
+          "lambdaStandardNm": 589.3,
+          "nStandard": 1.5168,
+          "nTarget": 1.5145
+        },
+        "paramsSources": {
+          "lambdaStandardNm": "标准值（报告预设，非实测）",
+          "nStandard": "N-BK7 折射率报告预设，非实测",
+          "nTarget": "N-BK7 折射率报告预设，非实测"
+        },
+        "frames": []
+      }
+    ],
+    "roleStats": {
+      "sodium": {
+        "n": 55,
+        "nEvidence": 55,
+        "nPx": 55,
+        "nMm": 55,
+        "meanMm": 0.21904,
+        "sdMm": 0.000184,
+        "uAMm": 2.48105549e-05,
+        "meanStripeCount": null,
+        "stripeCountStatus": "pending",
+        "referenceOnly": false,
+        "sourceType": "measured",
+        "frames": []
+      },
+      "reference": {
+        "n": 50,
+        "nEvidence": 50,
+        "nPx": 50,
+        "nMm": 50,
+        "meanMm": 0.250904,
+        "sdMm": 0.001055,
+        "uAMm": 0.0001491995308,
+        "meanStripeCount": null,
+        "stripeCountStatus": "pending",
+        "referenceOnly": false,
+        "wavelengthRole": "target",
+        "sourceType": "measured",
+        "frames": []
+      },
+      "no_lens": {
+        "n": 0,
+        "nEvidence": 0,
+        "nPx": 0,
+        "nMm": 0,
+        "meanMm": null,
+        "sdMm": null,
+        "uAMm": null,
+        "meanStripeCount": null,
+        "stripeCountStatus": "missing",
+        "referenceOnly": false,
+        "sourceType": "missing",
+        "frames": []
+      },
+      "with_lens": {
+        "n": 0,
+        "nEvidence": 0,
+        "nPx": 0,
+        "nMm": 0,
+        "meanMm": null,
+        "sdMm": null,
+        "uAMm": null,
+        "meanStripeCount": null,
+        "stripeCountStatus": "missing",
+        "referenceOnly": false,
+        "sourceType": "missing",
+        "frames": []
+      },
+      "calibration": {
+        "n": 0,
+        "nEvidence": 0,
+        "nPx": 0,
+        "nMm": 0,
+        "meanMm": null,
+        "sdMm": null,
+        "uAMm": null,
+        "meanStripeCount": null,
+        "stripeCountStatus": "missing",
+        "referenceOnly": false,
+        "sourceType": "missing",
+        "frames": []
+      }
+    },
+    "images": [],
+    "provenance": [],
+    "sourceHashes": {
+      "sodium": "b9267063dd1f4607a93fbf79ab6dcccfe25b0bea48b7f57c4ae8860d03b85aa8",
+      "reference": "c5cd1009e6cdfb0c521af0a8e23024e8e21c34f8a856b71a5fe6e692879695fe"
+    }
+  },
+  "imageManifest": [],
+  "sourceHashes": {
+    "sodium": "b9267063dd1f4607a93fbf79ab6dcccfe25b0bea48b7f57c4ae8860d03b85aa8",
+    "reference": "c5cd1009e6cdfb0c521af0a8e23024e8e21c34f8a856b71a5fe6e692879695fe"
+  }
+}

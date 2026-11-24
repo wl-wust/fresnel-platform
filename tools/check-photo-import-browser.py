@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -11,6 +12,7 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get("LAN_BASE", "https://localhost:52224")
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "output"
+sys.stdout.reconfigure(encoding="utf-8")
 PHOTO = Path(os.environ.get(
     "PHOTO",
     r"D:\物理实验\第二次自主设计\11.17实验\钠光灯\比值法"
@@ -19,12 +21,12 @@ PHOTO = Path(os.environ.get(
 
 
 def wait_role_count(page, role, expected):
-    """等待指定角色累计到目标照片数。"""
+    """等待指定角色累计到目标证据帧数，正式毫米帧需另行断言。"""
     page.wait_for_function(
         """
         ({ role, expected }) => {
           const session = BP.sessions.getActiveSession();
-          return session && BP.sessions.roleStats(session.id, role).n >= expected;
+          return session && BP.sessions.roleStats(session.id, role).nEvidence >= expected;
         }
         """,
         arg={"role": role, "expected": expected},
@@ -47,6 +49,9 @@ def upload_photo(page, role, expected):
           const frames = BP.sessions.listFrames(session.id, role);
           return {
             n: stat.n,
+            nEvidence: stat.nEvidence,
+            nPx: stat.nPx,
+            nMm: stat.nMm,
             meanPx: stat.meanPx,
             meanStripeCount: stat.meanStripeCount,
             frames: frames.map((frame) => ({
@@ -178,7 +183,7 @@ def main():
             """
             () => {
               const session = BP.sessions.getActiveSession();
-              if (!session || BP.sessions.roleStats(session.id, 'reference').n < 2) {
+              if (!session || BP.sessions.roleStats(session.id, 'reference').nEvidence < 2) {
                 return false;
               }
               return document.querySelector('#fringe_laser').dataset.sessionAuto === '1';
@@ -192,8 +197,12 @@ def main():
               const session = BP.sessions.getActiveSession();
               const frames = BP.sessions.listFrames(session.id, 'reference');
               const latest = frames.find((frame) => frame.source === 'photo');
+              const stat = BP.sessions.roleStats(session.id, 'reference');
               return {
-                n: BP.sessions.roleStats(session.id, 'reference').n,
+                n: stat.n,
+                nEvidence: stat.nEvidence,
+                nPx: stat.nPx,
+                nMm: stat.nMm,
                 deltaXPx: latest.deltaXPx,
                 stripeCount: latest.stripeCount,
                 source: latest.source,
@@ -208,7 +217,7 @@ def main():
         browser.close()
 
     saved_n = reticle["saved"]["N"]
-    expected_k = 5 / saved_n
+    expected_k = 1 / saved_n
     result = {
         "photo": str(PHOTO),
         "sodium": sodium,
@@ -228,7 +237,14 @@ def main():
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
     assert not errors, errors
-    assert sodium["n"] == 1 and reference["n"] == 1, "两种角色应各写入 1 张照片"
+    assert sodium["nEvidence"] == 1 and reference["nEvidence"] == 1, \
+        "两种角色应各写入 1 个照片证据帧"
+    assert sodium["n"] == 0 and reference["n"] == 0, \
+        "没有同帧刻线确认时，照片不得进入正式毫米统计"
+    assert sodium["nPx"] == 1 and reference["nPx"] == 1, \
+        "照片证据帧应保留真实像素间距"
+    assert sodium["nMm"] == 0 and reference["nMm"] == 0, \
+        "照片缺少同帧刻线时不得产生正式毫米值"
     assert sodium["meanPx"] > 0 and reference["meanPx"] > 0, "照片应写入真实 Δx"
     assert sodium["meanStripeCount"] > 0 and reference["meanStripeCount"] > 0, \
         "照片应写入真实条纹数"
@@ -236,7 +252,9 @@ def main():
     assert reference["frames"][0]["role"] == "reference", "参考角色必须隔离保存"
     assert all(frame["source"] == "photo" for frame in sodium["frames"] + reference["frames"]), \
         "照片来源必须标为 photo"
-    assert pc_photo["n"] == 2, "PC 导入应追加到同一参考角色"
+    assert pc_photo["nEvidence"] == 2, "PC 导入应追加到同一参考角色"
+    assert pc_photo["n"] == 0 and pc_photo["nMm"] == 0, \
+        "PC 照片未确认同帧刻线时也必须保持正式毫米帧为 0"
     assert pc_photo["deltaXPx"] > 0 and pc_photo["stripeCount"] > 0, \
         "PC 照片应保留真实 Δx 与条纹数"
     assert pc_photo["source"] == "photo" and pc_photo["sourceName"] == PHOTO.name, \
@@ -249,9 +267,9 @@ def main():
     assert "平均" in session_data["dxNaDetail"] and "条条纹" in session_data["dxNaDetail"], \
         "自动填入来源摘要应包含真实条纹数"
     assert reticle["calibration"]["source"] == "自动刻线标定", "k 应记录自动刻线来源"
-    assert reticle["calibration"]["L_source"] == "报告预设，待核实", \
-        "默认 L=5 mm 必须明确标为待核实预设"
-    assert "L 来源" in reticle["retResult"] and "报告预设，待核实" in reticle["retResult"], \
+    assert reticle["calibration"]["L_source"] == "人工确认 1.00 mm", \
+        "相邻刻线 1.00 mm 必须记录为人工确认"
+    assert "L 来源" in reticle["retResult"] and "人工确认 1.00 mm" in reticle["retResult"], \
         "标定结果页应显示 L 的真实来源"
     assert 3 <= line_count <= 7, "应识别真实刻线，而不是把 8 条周期条纹当成刻线"
     assert abs(saved_n - spacing_px) <= 0.5, "保存的 N 应与界面显示值一致"
