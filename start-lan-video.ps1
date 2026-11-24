@@ -9,7 +9,10 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RuntimeDir = Join-Path $Root '.runtime'
 $PfxPath = Join-Path $RuntimeDir 'fresnel-local.pfx'
-$PasswordText = 'fresnel-local-only'
+if (-not $env:LAN_PFX_PASSWORD) {
+    throw "未设置 LAN_PFX_PASSWORD，无法导出 PFX 证书。"
+}
+$PasswordText = $env:LAN_PFX_PASSWORD
 $Port = 52224
 $PcUrl = "https://localhost:$Port/"
 
@@ -73,7 +76,7 @@ if (-not $NoBrowser) {
 do {
   & node (Join-Path $Root 'tools\lan-video-server.js') `
     --pfx $PfxPath `
-    --password $PasswordText `
+    --password $env:LAN_PFX_PASSWORD `
     --port $Port `
     --root $Root `
     --lan-ip $LanIp
