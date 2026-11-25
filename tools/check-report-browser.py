@@ -40,6 +40,23 @@ def wait_report_ready(page: Page) -> None:
     )
 
 
+def math_text(page: Page, selector: str) -> str:
+    """把原生下标还原成下划线记号，便于核对公式语义。"""
+    return page.locator(selector).evaluate(
+        """
+        root => {
+          function walk(node) {
+            if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
+            if (node.nodeType !== Node.ELEMENT_NODE) return '';
+            const body = Array.from(node.childNodes).map(walk).join('');
+            return node.tagName === 'SUB' ? '_' + body : body;
+          }
+          return walk(root);
+        }
+        """
+    )
+
+
 def open_import_file(page: Page, name: str, payload: str) -> None:
     """通过文件输入打开导入预览，不直接修改报告。"""
     page.set_input_files(
@@ -150,28 +167,38 @@ def main() -> None:
         check(default_state["referenceOnly"] is False and
               default_state["referenceCount"] == 50,
               "红光按待测目标写入 50 个正式帧")
-        check(default_state["sodiumStripes"] == "pending" and
-              default_state["targetStripes"] == "pending",
-              "双角色条纹数保持待补，不用旧值冒充")
+        check(default_state["sodiumStripes"] == "measured" and
+              default_state["targetStripes"] == "measured",
+              "双角色条纹数为实测 measured，不再待补")
         geometry_text = page.locator("#geometryGrid").inner_text()
         check("没有二次成像观测记录" in geometry_text,
               "默认快照不借用另一轮二次成像几何量")
-        check("条纹数待补" in page.locator("#stepsData").inner_text(),
-              "结果区明确显示条纹数待补")
+        check("平均 24.0 条条纹" in page.locator("#stepsData").inner_text(),
+              "结果区显示钠光实测条纹数 24.0")
         desktop_overflow = page.evaluate(
             "() => document.documentElement.scrollWidth > window.innerWidth + 1"
         )
         check(not desktop_overflow, "桌面报告页无横向溢出")
 
         # A–F 结果区：五步、传播公式、未定量 B 类、标称比较。
-        steps_text = page.locator("#steps").inner_text()
+        steps_text = math_text(page, "#steps")
         check("五步" in steps_text, "结果区标题出现五步表述")
         check("1 测量值" in steps_text and "5 结果表达式" in steps_text,
               "五步表含第 1 步与第 5 步")
         check("U_r,95" in steps_text, "展示相对扩展不确定度")
         check("仅 A 类重复性项" in steps_text, "明确标注仅 A 类重复性项")
         check("P=95%" in steps_text, "标注置信水平 P=95%")
-        formula_text = page.locator("#stepsFormula").inner_text()
+        check(page.locator("#steps sub.math-sub").count() >= 15,
+              "公式变量以原生下角标渲染")
+        check(
+            page.locator("#stepsResult .result-meta").first.evaluate(
+                "el => getComputedStyle(el.querySelector('sub')).display"
+            ) == "inline",
+            "结果摘要下标保持行内，不单独占行",
+        )
+        formula_text = math_text(page, "#stepsFormula")
+        check("_" not in page.locator("#stepsFormula").inner_text(),
+              "传播公式不再显示下划线占位")
         check("u(Δx_R)/Δx_R" in formula_text and "u(n_Na)/(n_Na−1)" in formula_text,
               "误差传播公式五项齐全")
         terms_text = page.locator("#stepsTerms").inner_text()
@@ -317,9 +344,11 @@ def main() -> None:
             box["y"] + box["height"] * 0.45,
         )
         page.wait_for_function(
-            "() => document.querySelector('#traceReadout').textContent.includes('d_trace=')",
+            "() => document.querySelector('#traceReadout').innerHTML.includes('<sub')",
             timeout=5000,
         )
+        check("d_trace" in math_text(page, "#traceReadout"),
+              "追迹读数中的数学变量使用下角标")
         check("残差=" in page.locator("#traceReadout").inner_text(),
               "追迹图悬停显示 d 与残差读数")
         page.click("#traceResidualView")
@@ -424,6 +453,24 @@ def main() -> None:
         result["mobileHero"] = mobile.locator("#heroValue").inner_text()
 
         mobile_context.close()
+
+        # PC 与手机平台页同样统一渲染数学下标。
+        platform = context.new_page()
+        attach_error_capture(platform, errors)
+        platform.goto(BASE + "/index.html", wait_until="networkidle")
+        check(
+            platform.locator('label[for="trace_d"] sub.math-sub').count() == 1
+            and "d_trace" in math_text(platform, 'label[for="trace_d"]'),
+            "PC 平台变量使用下角标",
+        )
+        platform.goto(BASE + "/mobile.html", wait_until="networkidle")
+        mobile_formula = platform.locator(".formula").filter(has_text="n").first
+        check(
+            mobile_formula.locator("sub.math-sub").count() >= 6
+            and "_" not in mobile_formula.inner_text(),
+            "手机平台公式使用下角标",
+        )
+        platform.close()
 
         # 本机导入仍应覆盖默认快照；?demo=1 才恢复历史 641.51 nm 条件情景。
         page.reload(wait_until="networkidle")

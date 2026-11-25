@@ -121,7 +121,7 @@ check('空报告模板不伪造实测、几何量或方法结果', () => {
   return '空模板 / 三种方法均缺项';
 });
 
-check('默认实测快照复算 672.0 ± 0.9 nm 且条纹数保持待补', () => {
+check('默认实测快照复算 672.0 ± 0.9 nm 且条纹数为实测值', () => {
   const file = path.join(root, 'data/reports/fresnel-sodium-red-2026-11-24.json');
   assert.strictEqual(fs.existsSync(file), true, '缺少默认实测快照');
   const snapshot = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -136,10 +136,10 @@ check('默认实测快照复算 672.0 ± 0.9 nm 且条纹数保持待补', () =>
   assert.strictEqual(sodium.nMm, 55);
   assert.strictEqual(reference.nMm, 50);
   assert.strictEqual(reference.referenceOnly, false);
-  assert.strictEqual(sodium.meanStripeCount, null);
-  assert.strictEqual(reference.meanStripeCount, null);
-  assert.strictEqual(sodium.stripeCountStatus, 'pending');
-  assert.strictEqual(reference.stripeCountStatus, 'pending');
+  assert.strictEqual(sodium.meanStripeCount, 24);
+  assert.strictEqual(reference.meanStripeCount, 24.727);
+  assert.strictEqual(sodium.stripeCountStatus, 'measured');
+  assert.strictEqual(reference.stripeCountStatus, 'measured');
   almost(ratio.valueNm, 672.022, 0.01, '默认比值法结果');
   assert.strictEqual(ratio.uncertainty.expression, '(672.0 ± 0.9) nm');
   assert.strictEqual(ratio.uncertainty.unquantified.length, 3);

@@ -412,6 +412,11 @@ button {
   margin: 0;
 }
 
+/* 结果摘要里的数学下标是行内元素，不能按网格项单独换行。 */
+p.result-meta {
+  display: block;
+}
+
 .result-meta div {
   display: flex;
   justify-content: space-between;
